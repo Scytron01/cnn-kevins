@@ -1,5 +1,4 @@
 # Implementasi CNN untuk Smart Laundry Sorter
-### Kaggle Fashion Clothing Catalog · Cyclone V FPGA
 
 **Kevin Kidney Sumual | 101022300012**
 
