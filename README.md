@@ -519,3 +519,21 @@ Source HPS/RTL telah ditambahkan, tetapi proyek belum dinyatakan berjalan penuh 
 - Bit-exact test Python-vs-Verilog, simulasi ModelSim/Icarus lengkap, serta uji fisik pada board.
 
 Sistem ini adalah single-label classifier: satu foto sebaiknya berisi satu pakaian. Foto berisi beberapa pakaian memerlukan object detection/instance segmentation dan tidak dihitung sebagai beberapa item oleh model sekarang.
+
+
+---
+
+## 10. Galeri dataset dalam file JPG
+
+Dataset katalog utama `shivamb/fashion-clothing-products-catalog` berisi metadata katalog dan bukan direktori foto JPG yang bisa langsung dibuka. Agar foto produk dapat dilihat sebagai file gambar biasa, proyek menyediakan galeri JPG pendamping dari [Fashion Product Images (Small)](https://www.kaggle.com/datasets/paramaggarwal/fashion-product-images-small).
+
+Jalankan dari root repository:
+
+```bash
+pip install -r requirements.txt
+python -m algoritma.download_product_images --per-class 8
+```
+
+Script menyalin hingga 8 JPG per kelas ke `dataset/images/` dan membuat `manifest.csv`. File dapat dibuka melalui File Explorer, VS Code, atau GitHub setelah folder hasil dibuat dan di-commit. Dataset katalog utama tetap dipertahankan sebagai sumber metadata; galeri pendamping tidak otomatis menjadi dataset training.
+
+Lihat [dataset/images/README.md](dataset/images/README.md) untuk struktur folder dan cara membuat galeri.
