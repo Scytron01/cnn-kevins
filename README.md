@@ -2,7 +2,7 @@
 
 **Kevin Kidney Sumual | 101022300012**
 
-Proyek ini mengembangkan sistem klasifikasi pakaian laundry menjadi lima kelas berdasarkan siluet. Dataset sumber berasal dari [Fashion Clothing Products Catalog — Kaggle](https://www.kaggle.com/datasets/shivamb/fashion-clothing-products-catalog/data) (`shivamb/fashion-clothing-products-catalog`). Pipeline Python digunakan untuk menyiapkan dataset, melatih CNN, mengevaluasi model, dan menguji prediksi. Bagian FPGA diarahkan ke Intel Cyclone V melalui Quartus Prime Lite, ModelSim-Altera, dan Ashling RiscFree.
+Proyek ini mengembangkan sistem klasifikasi pakaian laundry menjadi lima kelas berdasarkan siluet. Dataset gambar aktif berasal dari [Fashion Product Images (Small) — Kaggle](https://www.kaggle.com/datasets/paramaggarwal/fashion-product-images-small) (`paramaggarwal/fashion-product-images-small`), dengan pemetaan `articleType` ke lima kelas laundry. Pipeline Python menyiapkan JPG berfolder train/valid/test, mengekstrak siluet 64×64 dan fitur geometri, melatih CNN, serta mengevaluasi model. Bagian FPGA diarahkan ke Intel Cyclone V melalui Quartus Prime Lite, ModelSim-Altera, dan Ashling RiscFree.
 
 ---
 
@@ -20,7 +20,7 @@ Diagram ini menunjukkan aliran data dari sumber dataset sampai hasil prediksi. T
 
 ~~~mermaid
 flowchart TD
-    K["Kaggle: Fashion Clothing Products Catalog<br/>shivamb/fashion-clothing-products-catalog"]
+    K["Kaggle: Fashion Product Images (Small)<br/>paramaggarwal/fashion-product-images-small"]
     D["Download dengan KaggleHub<br/>atau gunakan dataset lokal"]
     M["Baca metadata + petakan articleType<br/>ke 5 kelas laundry"]
     S["Pilih subset per kelas<br/>maks. 1.000 gambar per kelas"]
@@ -351,7 +351,7 @@ Project top-level Quartus (\`.qpf/.qsf\`), pin assignment, dan clock constraint 
 
 ## 7. Referensi proyek
 
-- [Dataset Kaggle — Fashion Clothing Products Catalog](https://www.kaggle.com/datasets/shivamb/fashion-clothing-products-catalog/data)
+- [Dataset Kaggle — Fashion Product Images (Small)](https://www.kaggle.com/datasets/paramaggarwal/fashion-product-images-small/data)
 - [Repository GitHub — cnn-kevins](https://github.com/Scytron01/cnn-kevins)
 - [Laporan status hardware](report/HARDWARE_STATUS.md)
 - [Kompatibilitas toolchain](report/TOOLCHAIN_COMPATIBILITY.md)
@@ -525,7 +525,7 @@ Sistem ini adalah single-label classifier: satu foto sebaiknya berisi satu pakai
 
 ## 10. Galeri dataset dalam file JPG
 
-Dataset katalog utama `shivamb/fashion-clothing-products-catalog` berisi metadata katalog dan bukan direktori foto JPG yang bisa langsung dibuka. Agar foto produk dapat dilihat sebagai file gambar biasa, proyek menyediakan galeri JPG pendamping dari [Fashion Product Images (Small)](https://www.kaggle.com/datasets/paramaggarwal/fashion-product-images-small).
+Dataset katalog utama `paramaggarwal/fashion-product-images-small` berisi metadata katalog dan bukan direktori foto JPG yang bisa langsung dibuka. Agar foto produk dapat dilihat sebagai file gambar biasa, proyek menyediakan galeri JPG pendamping dari [Fashion Product Images (Small)](https://www.kaggle.com/datasets/paramaggarwal/fashion-product-images-small).
 
 Jalankan dari root repository:
 
@@ -537,3 +537,16 @@ python -m algoritma.download_product_images --per-class 8
 Script menyalin hingga 8 JPG per kelas ke `dataset/images/` dan membuat `manifest.csv`. File dapat dibuka melalui File Explorer, VS Code, atau GitHub setelah folder hasil dibuat dan di-commit. Dataset katalog utama tetap dipertahankan sebagai sumber metadata; galeri pendamping tidak otomatis menjadi dataset training.
 
 Lihat [dataset/images/README.md](dataset/images/README.md) untuk struktur folder dan cara membuat galeri.
+
+
+## Dataset JPG dan training lima kelas
+
+Panduan aktif untuk download Fashion Product Images (Small), membuat struktur JPG `dataset/fashion_images/{train,valid,test}/<kelas>/`, memproses mask/geometri, menjalankan training, dan ekspor bobot FPGA ada di [report/FASHION_JPG_DATASET.md](report/FASHION_JPG_DATASET.md). Perintah utama:
+
+```bash
+python -m algoritma.prepare_fashion_images --max-per-class 100
+python -m algoritma.train --epochs 40 --batch-size 32
+python -m algoritma.export_verilog_weights
+```
+
+Foto katalog tersebut bukan foto kondisi laundry lapangan; hasil perlu divalidasi lagi memakai foto pakaian nyata.

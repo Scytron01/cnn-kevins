@@ -9,7 +9,7 @@ from algoritma.model import LaundryShapeCNN
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CHECKPOINT = ROOT / "report/runs/laundry_shape_cnn/best_model.pt"
-DEFAULT_DATA = ROOT / "dataset/processed/laundry64.npz"
+DEFAULT_DATA = ROOT / "dataset/processed/laundry64_train.npz"
 DEFAULT_OUT = ROOT / "verilog/weights"
 Q24 = 1 << 24
 Q7_MAX = 127
