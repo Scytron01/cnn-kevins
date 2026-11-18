@@ -1,4 +1,4 @@
-# 🧺 Smart Laundry Sorter: Implementasi Hybrid CNN untuk Penyortiran Pakaian Berbasis Morfologi Piksel
+#  Smart Laundry Sorter: Implementasi Hybrid CNN untuk Penyortiran Pakaian Berbasis Morfologi Piksel
 
 [![Python](https://img.shields.io/badge/Python-3.9%2B-blue.svg)](https://www.python.org/)
 [![TensorFlow](https://img.shields.io/badge/TensorFlow-2.15%2B-orange.svg)](https://www.tensorflow.org/)
