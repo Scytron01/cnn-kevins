@@ -242,54 +242,11 @@ Avalon-ST menggunakan sinyal \`valid/data/startofpacket/endofpacket/ready\`. Pad
 
 ---
 
-## 4. Struktur repository
-
-Nama folder lama tetap dipertahankan.
-
-~~~text
-cnn-kevins/
-├── Reference/                 # referensi proyek sebelumnya
-├── algoritma/
-│   ├── class_map.json         # mapping kategori Kaggle ke 5 kelas
-│   ├── preprocessing.py       # segmentasi, mask, geometri
-│   ├── prepare_dataset.py     # download + materialisasi + preprocessing
-│   ├── model.py               # LaundryShapeCNN
-│   ├── train.py               # training dan evaluasi
-│   ├── predict.py             # inferensi satu foto
-│   └── test_pipeline.py       # unit test Python
-├── dataset/
-│   ├── raw/                   # foto produk sumber (diisi saat downloader dijalankan)
-│   │   └── fashion-clothing-products-catalog/
-│   │       ├── styles.csv
-│   │       ├── manifest.csv
-│   │       ├── download_report.json
-│   │       └── images/
-│   └── processed/             # NPZ, manifest, distribusi, preview
-├── report/
-│   ├── DATASET_AND_LABELS.md
-│   ├── HARDWARE_STATUS.md
-│   ├── TOOLCHAIN_COMPATIBILITY.md
-│   └── VALIDATION_STATUS.md
-├── verilog/
-│   ├── laundry_geom_ip.v      # geometry extractor
-│   ├── laundry_geom_hw.tcl    # Platform Designer descriptor
-│   ├── tb_laundry_geom.v      # testbench geometri
-│   └── run_modelsim.do        # script ModelSim
-├── software_niosv/
-│   └── src/main.c             # telemetry geometry IP
-├── requirements.txt
-└── README.md
-~~~
-
-File gambar Kaggle berukuran besar dan artefak training lokal tidak otomatis di-commit ke GitHub. Folder output dan dokumentasi tetap berada di repository. Sesudah downloader dijalankan, foto sumber dapat dilihat di \`dataset/raw/\` pada komputer lokal.
-
----
-
-## 5. Cara menjalankan pipeline Python
+## 4. Cara menjalankan pipeline Python
 
 Gunakan Python 3.10+.
 
-### 5.1 Instalasi
+### 4.1 Instalasi
 
 ~~~powershell
 python -m venv .venv
@@ -300,7 +257,7 @@ pip install -r requirements.txt
 
 Siapkan autentikasi Kaggle API/KaggleHub dan pastikan akun Anda mempunyai akses ke dataset.
 
-### 5.2 Download dan preprocessing
+### 4.2 Download dan preprocessing
 
 Jalankan dari root repository:
 
@@ -316,7 +273,7 @@ python -m algoritma.prepare_dataset --dataset-dir "D:/datasets/fashion-clothing-
 
 Default konfigurasi: maksimum 1.000 foto per kelas, resolusi sumber minimum 32×32, siluet 64×64, dan minimum 50 sampel berhasil disegmentasi per kelas. Periksa \`dataset/raw/.../manifest.csv\`, \`dataset/processed/laundry64.distribution.csv\`, laporan JSON, dan \`dataset/processed/mask_preview.png\` sebelum training.
 
-### 5.3 Training
+### 4.3 Training
 
 ~~~bash
 python -m algoritma.train --epochs 40 --batch-size 32
@@ -324,7 +281,7 @@ python -m algoritma.train --epochs 40 --batch-size 32
 
 Checkpoint dan metrik disimpan di \`report/runs/laundry_shape_cnn/\`.
 
-### 5.4 Prediksi satu gambar
+### 4.4 Prediksi satu gambar
 
 ~~~bash
 python -m algoritma.predict "path/to/clothing.jpg"
@@ -332,7 +289,7 @@ python -m algoritma.predict "path/to/clothing.jpg"
 
 Pipeline prediksi menggunakan segmentasi dan ekstraksi geometri yang sama dengan pipeline dataset, lalu memuat \`best_model.pt\` untuk menentukan lima kelas dan confidence.
 
-### 5.5 Unit test
+### 4.5 Unit test
 
 ~~~bash
 python -m unittest discover -s algoritma -p "test_*.py" -v
@@ -342,7 +299,7 @@ Fixture unit test menguji jalur program menggunakan katalog mini buatan. Fixture
 
 ---
 
-## 6. Toolchain FPGA
+## 5. Toolchain FPGA
 
 Tool yang menjadi target proyek:
 
@@ -362,7 +319,7 @@ Project top-level Quartus (\`.qpf/.qsf\`), pin assignment, dan clock constraint 
 
 ---
 
-## 7. Roadmap menuju CNN di FPGA
+## 6. Roadmap menuju CNN di FPGA
 
 1. **Tetapkan target board:** tentukan model board dan exact Cyclone V part number, clock, reset, dan pin I/O.
 2. **Validasi geometri RTL:** jalankan ModelSim, perbaiki isu testbench/RTL, dan impor custom IP ke Platform Designer.
@@ -378,7 +335,7 @@ Project top-level Quartus (\`.qpf/.qsf\`), pin assignment, dan clock constraint 
 
 ---
 
-## 8. Referensi proyek
+## 7. Referensi proyek
 
 - [Dataset Kaggle — Fashion Clothing Products Catalog](https://www.kaggle.com/datasets/shivamb/fashion-clothing-products-catalog/data)
 - [Repository GitHub — cnn-kevins](https://github.com/Scytron01/cnn-kevins)
@@ -389,7 +346,7 @@ Project top-level Quartus (\`.qpf/.qsf\`), pin assignment, dan clock constraint 
 
 ---
 
-## 9. CNN inference di Verilog (reference accelerator)
+## 8. CNN inference di Verilog (reference accelerator)
 
 CNN Python dapat diekspor menjadi bobot INT8 dan dijalankan oleh top-level Verilog cnn_top. Implementasi RTL serial ini memproses model dengan satu MAC signed 8×8 yang dipakai bergantian oleh Conv1–Conv3 dan FC. Aktivasi disimpan sebagai signed INT8 nonnegatif (0..127); accumulator menggunakan signed INT32; requantization memakai multiplier unsigned Q24 hasil kalibrasi.
 
