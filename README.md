@@ -1,14 +1,16 @@
-# Smart Laundry Sorter — Kaggle Fashion Shape-CNN
+# Smart Laundry Sorter — Kaggle Fashion Clothing Catalog + Cyclone V
 
-**Kevin Kidney Sumual | 101022300012**
+Dataset sumber: [Fashion Clothing Products Catalog — Kaggle](https://www.kaggle.com/datasets/shivamb/fashion-clothing-products-catalog/data), handle `shivamb/fashion-clothing-products-catalog`.
 
-Proyek klasifikasi pakaian laundry berdasarkan siluet dari dataset Kaggle **Fashion Product Images Small** (`paramaggarwal/fashion-product-images-small`). Foto katalog diproses menjadi mask biner 64×64 dan empat fitur geometri, kemudian digunakan untuk melatih CNN PyTorch lima kelas.
+## Dataset terlihat di folder dataset
 
-> **Status jujur implementasi:** pipeline Kaggle, preprocessing, training/evaluasi CNN Python, prediksi satu foto, RTL geometry extractor, testbench, dan contoh firmware Nios V untuk membaca metadata geometri disertakan. RTL saat ini **belum merupakan CNN accelerator penuh**. Conv1–Conv3 RTL, kuantisasi fixed-point/INT8, FC/ArgMax di Nios V, dan verifikasi bit-exact adalah pekerjaan lanjutan.
+Jalankan `python -m algoritma.prepare_dataset`. Downloader memakai KaggleHub, memilih sampai 1.000 gambar per kelas, kemudian menyalin gambar asli ke `dataset/raw/fashion-clothing-products-catalog/images/` bersama `styles.csv`, `manifest.csv`, dan `download_report.json`. Hasil mask 64×64, empat fitur geometri, manifest, distribusi, laporan dan preview masuk ke `dataset/processed/`.
 
-## Kelas
+Foto berukuran besar tidak di-commit otomatis ke GitHub. Folder dan dokumentasi ada di repo; menjalankan downloader akan mengisi dataset sebenarnya pada salinan lokal. Ini menghindari unggah arsip massal tanpa mengecek ukuran dan ketentuan redistribusi.
 
-| ID | Kelas | Kaggle `articleType` |
+## Lima kelas
+
+| ID | Kelas | articleType |
 |---:|---|---|
 | 0 | Baju | Shirts, Tshirts, Tops, Kurtas |
 | 1 | Celana | Jeans, Trousers, Track Pants, Shorts, Capris |
@@ -16,104 +18,50 @@ Proyek klasifikasi pakaian laundry berdasarkan siluet dari dataset Kaggle **Fash
 | 3 | Celana Dalam | Briefs, Boxers, Trunk |
 | 4 | Kaus Dalam | Innerwear Vests, Camisoles |
 
-Mapping ada di `algoritma/class_map.json`. Kategori yang tersedia bergantung pada salinan dataset. Skrip melaporkan distribusi dan menghentikan proses bila suatu kelas tidak memenuhi minimum; jangan membuat label palsu atau menduplikasi sampel untuk menutup kelas kosong.
+Mapping bisa diedit di `algoritma/class_map.json`. Downloader mencoba nama kolom umum untuk ID produk (`id`, `ProductId`, `product_id`) dan tipe pakaian (`articleType`, `ProductType`, `category`, dan variasinya). Nilai kategori tetap harus cocok dengan pemetaan di `class_map.json`; jika tidak tersedia, program berhenti dengan laporan, bukan membuat sampel palsu.
 
-## Struktur repository
-
-Nama folder lama dipertahankan: `Reference/`, `algoritma/`, `dataset/`, `report/`, dan `verilog/`. Placeholder lama tidak dihapus. Folder `software_niosv/` ditambahkan untuk firmware.
-
-```text
-cnn-kevins/
-├── Reference/                    # folder lama, dipertahankan
-├── algoritma/
-│   ├── class_map.json            # articleType -> 5 kelas
-│   ├── preprocessing.py          # segmentasi, letterbox, geometri
-│   ├── prepare_dataset.py        # Kaggle -> NPZ
-│   ├── model.py                  # CNN tiga convolutional blocks
-│   ├── train.py                  # training, validation, test
-│   ├── predict.py                # inferensi satu foto
-│   └── test_pipeline.py          # unit test
-├── dataset/                      # dataset lokal (tidak di-commit)
-├── report/                       # dokumentasi dan output eksperimen
-├── verilog/
-│   ├── laundry_geom_ip.v         # Avalon-ST geometry extractor
-│   ├── laundry_geom_hw.tcl       # descriptor Platform Designer
-│   └── tb_laundry_geom.v         # testbench siluet celana
-├── software_niosv/src/main.c     # telemetry geometri Nios V
-├── requirements.txt
-└── .gitignore
-```
-
-## Arsitektur Python
-
-Input mask `1×64×64` → Conv1 `1→8` → Conv2 `8→16` → Conv3 `16→32`, masing-masing Conv2D + ReLU + MaxPool 2×2 → Global Average Pooling (32 fitur) → gabung empat fitur geometri → classifier `36→64→5`.
-
-Empat fitur: normalized area, normalized aspect ratio, bounding-box occupancy, dan proporsi baris bagian bawah bounding box yang memiliki tepat dua segmen foreground. Fitur ketiga adalah **bounding-box occupancy, bukan convex-hull solidity**; definisi tersebut dipilih agar dapat dihitung ulang dari area dan bounding box hardware.
-
-## Instalasi dan dataset Kaggle
+## Instalasi dan download
 
 Gunakan Python 3.10+.
 
-```bash
+```powershell
 python -m venv .venv
-# Windows PowerShell
 .venv\Scripts\Activate.ps1
-# Linux/macOS: source .venv/bin/activate
-python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Siapkan autentikasi Kaggle/KaggleHub pada komputer Anda, lalu jalankan:
+Siapkan autentikasi Kaggle API/KaggleHub dan pastikan akun mendapat akses ke dataset. Jalankan dari root repo:
 
 ```bash
 python -m algoritma.prepare_dataset
 ```
 
-Alternatif unduh manual: arahkan ke folder berisi `styles.csv` dan `images/`.
+Untuk dataset yang sudah diunduh manual:
 
 ```bash
-python -m algoritma.prepare_dataset --no-download --dataset-dir "D:/dataset/fashion-product-images-small"
+python -m algoritma.prepare_dataset --dataset-dir D:/datasets/fashion-clothing-products-catalog
 ```
 
-Parameter lengkap: `python -m algoritma.prepare_dataset --help`. Default minimum resolusi sumber 32×32, mask 64×64, maksimum 2500 sampel/kelas, minimum 20 sampel/kelas. Output lokal: `dataset/processed/laundry64.npz`, `laundry64.report.json`, `laundry64.distribution.csv`, dan `mask_preview.png`.
+Default: gambar sumber minimal 32×32, mask 64×64, maksimum 1.000 gambar per kelas, minimum 50 gambar lolos segmentasi per kelas. Periksa manifest di dataset/raw, distribusi, dan dataset/processed/mask_preview.png sebelum training.
 
-**Periksa `mask_preview.png` sebelum training.** Dataset katalog bukan citra pakaian di conveyor; model/mannequin, latar putih, bayangan, dan objek yang menyentuh tepi gambar dapat mengganggu segmentasi. Kumpulkan pula foto conveyor/lightbox untuk validasi domain akhir. Dataset mentah, NPZ, checkpoint, dan hasil eksperimen tidak disimpan dalam Git.
-
-## Training dan prediksi
+## Training
 
 ```bash
 python -m algoritma.train --epochs 40 --batch-size 32
-python -m algoritma.predict "path/to/clothing.jpg"
+python -m algoritma.predict path/to/clothing.jpg
+python -m unittest discover -s algoritma -p test_*.py -v
 ```
 
-Training memakai split stratified 70%/15%/15% (train/validation/test), early stopping berdasarkan validation macro-F1, lalu melaporkan test accuracy, macro-F1, classification report, dan confusion matrix. Output ada di `report/runs/laundry_shape_cnn/`.
+CNN Python memakai tiga convolutional blocks, GAP 32 fitur, empat fitur geometri, lalu classifier 36→64→5. Fitur geometri: normalized area, normalized aspect ratio, bounding-box occupancy, lower two-run score. Foto katalog tidak sama dengan pakaian di conveyor; validasi akhir perlu memakai foto conveyor/lightbox.
 
-## Unit test Python
+## Hardware target
 
-```bash
-python -m unittest discover -s algoritma -p "test_*.py" -v
-```
+- Quartus Prime Lite Edition v25.1+ dengan Cyclone V Device Support.
+- ModelSim-Altera v18 atau lebih baru.
+- Ashling RiscFree IDE for Altera.
 
-Fixture pengujian membuat katalog dummy berformat `styles.csv` + `images/`; fixture tersebut hanya menguji jalur kode, bukan hasil eksperimen dataset Kaggle dan bukan dasar klaim akurasi.
+RTL yang tersedia sekarang adalah **geometry extractor Avalon-ST/Avalon-MM, bukan CNN accelerator penuh**. Firmware Nios V hanya membaca telemetry geometri. Conv1–Conv3 RTL, fixed-point/INT8 exporter, FC/ArgMax, dan uji bit-exact belum selesai.
 
-## RTL geometry extractor
+Untuk ModelSim dari folder verilog jalankan `do run_modelsim.do`. Belum ada .qpf/.qsf/pin assignment karena board dan part number Cyclone V belum diketahui. Pastikan Nios V processor IP tersedia di Platform Designer untuk kombinasi Quartus Lite dan Cyclone V Anda; RiscFree IDE terpasang tidak otomatis membuktikan dukungan IP pada semua family/edition. Detail ada di report/TOOLCHAIN_COMPATIBILITY.md.
 
-`verilog/laundry_geom_ip.v` menerima satu bit masker per beat Avalon-ST. Saat EOP, blok menyelesaikan hitungan baris bagian bawah dengan dua run. Simulasi Icarus:
-
-```bash
-iverilog -g2012 -s tb_laundry_geom -o verilog/tb_laundry_geom.out verilog/laundry_geom_ip.v verilog/tb_laundry_geom.v
-vvp verilog/tb_laundry_geom.out
-```
-
-Peta CSR (word address): 0 status (bit 2 frame done, bit 1 finalizing), 1 area, 2 bounding box `[xmin,xmax,ymin,ymax]`, 3 jumlah baris lower-two-run, 4 lebar/tinggi. Firmware `software_niosv/src/main.c` hanya membaca metadata geometri; belum menjalankan klasifikasi CNN. Hubungkan custom IP di Platform Designer dan pastikan base address muncul sebagai `LAUNDRY_GEOM_IP_0_BASE` di `system.h`.
-
-## Pekerjaan FPGA berikutnya
-
-1. Tetapkan kontrak fixed-point dan Python golden model (skala, lebar accumulator, rounding, saturation, padding, pooling).
-2. Implementasikan Conv1–Conv3, ReLU, pooling, dan GAP di RTL.
-3. Ekspor bobot/bias ROM dengan skala kuantisasi konsisten.
-4. Tambahkan register fitur, FC/ArgMax, serta klasifikasi lima kelas di Nios V.
-5. Buat testbench bit-exact Python vs. Verilog.
-6. Ukur ALM/M10K/DSP, timing, dan latensi pada board Cyclone V yang dituju.
-
-Poin tersebut adalah roadmap, bukan hasil yang sudah dicapai. Jangan mengklaim akurasi Kaggle, speedup, pemakaian resource, atau timing FPGA sebelum pengukuran aktual dilakukan.
+Tidak ada klaim akurasi dataset, FPGA synthesis, PPA, speedup, atau timing sebelum hasil eksperimen nyata diperoleh.

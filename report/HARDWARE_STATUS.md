@@ -1,7 +1,5 @@
-# Status hardware
+# Hardware status
 
-RTL yang tersedia adalah `verilog/laundry_geom_ip.v`: geometry extractor streaming, bukan CNN accelerator. Modul menghitung area foreground, bounding box, lebar/tinggi, dan jumlah baris bawah dengan tepat dua segmen.
+Available: Avalon-ST/Avalon-MM geometry extractor, Platform Designer descriptor, ModelSim testbench, Nios V geometry telemetry example. Firmware only reads geometry registers; CNN classification is not connected.
 
-`software_niosv/src/main.c` membaca dan mencetak metadata geometri melalui Avalon-MM. Firmware belum menjalankan klasifikasi CNN lima kelas.
-
-Tahap berikutnya: freeze kontrak fixed-point dan Python golden model (activation/weight scales, accumulator width, rounding, saturation, padding, pooling); implementasikan Conv1–Conv3, ReLU, pooling, GAP; ekspor bobot ROM; tambahkan feature registers dan FC/ArgMax; lalu uji bit-exact. Belum ada klaim Quartus synthesis, resource utilization, timing closure, speedup, atau pengukuran board.
+Not implemented/verified: complete Quartus project, top-level QSF/SDC/pins, camera capture, Conv1-Conv3 RTL, fixed-point/INT8 exporter, feature registers, FC/ArgMax, bit-exact test, synthesis, timing or board test. Exact Cyclone V board/part number is required before board constraints. Check whether Nios V processor IP is offered for the installed Quartus Lite/device combination in Platform Designer; RiscFree IDE alone does not prove IP support for every family/edition.

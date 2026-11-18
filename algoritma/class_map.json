@@ -1,5 +1,6 @@
 {
-  "dataset": "paramaggarwal/fashion-product-images-small",
+  "dataset": "shivamb/fashion-clothing-products-catalog",
+  "dataset_url": "https://www.kaggle.com/datasets/shivamb/fashion-clothing-products-catalog/data",
   "class_names": [
     "Baju",
     "Celana",
