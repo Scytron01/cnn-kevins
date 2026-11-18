@@ -53,10 +53,10 @@ module vga_fb_dma #(
             end
             case(dma_state)
                 DMA_IDLE: if(pending_fetch) begin
-                    fetch_line<=pending_line; pending_fetch<=0; dma_state<=DMA_REQ;
+                    fetch_line<=pending_line; read_word_count<=0; pending_fetch<=0; dma_state<=DMA_REQ;
                 end
                 DMA_REQ: if(!avm_waitrequest) begin
-                    read_word_count<=0; dma_state<=DMA_DATA;
+                    dma_state<=DMA_DATA;
                 end
                 DMA_DATA: if(avm_readdatavalid) begin
                     if(!fetch_line[0]) begin
