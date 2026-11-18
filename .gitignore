@@ -4,7 +4,6 @@ __pycache__/
 venv/
 .env
 .kaggle/
-# Keep the dataset folder/documentation in Git, but not large downloaded payloads.
 dataset/raw/*
 !dataset/raw/README.md
 !dataset/raw/.gitkeep

@@ -1,3 +1,3 @@
 # Processed dataset
 
-Folder ini diisi otomatis setelah downloader + preprocessing berhasil. Output utamanya `laundry64.npz` (mask 64×64, empat fitur geometri, label), manifest CSV, distribusi kelas, laporan JSON, dan `mask_preview.png`. Hasil model lokal yang besar tetap di-ignore oleh Git.
+Output: laundry64.npz, manifests, class distribution, segmentation report and mask_preview.png. Large files are ignored by Git.

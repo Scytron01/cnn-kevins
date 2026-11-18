@@ -1,214 +1,163 @@
 from __future__ import annotations
-
 import argparse
 import json
 import re
 import shutil
 from collections import Counter
 from pathlib import Path
-
 import cv2
 import numpy as np
 import pandas as pd
-
 from algoritma.preprocessing import preprocess_bgr
 
 ROOT = Path(__file__).resolve().parents[1]
-DATASET_HANDLE = "shivamb/fashion-clothing-products-catalog"
-DEFAULT_MAP = ROOT / "algoritma" / "class_map.json"
-DEFAULT_RAW = ROOT / "dataset" / "raw" / "fashion-clothing-products-catalog"
-DEFAULT_OUT = ROOT / "dataset" / "processed" / "laundry64.npz"
+HANDLE = "shivamb/fashion-clothing-products-catalog"
+RAW = ROOT / "dataset/raw/fashion-clothing-products-catalog"
+OUT = ROOT / "dataset/processed"
+MAP = ROOT / "algoritma/class_map.json"
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
 
-
-def norm(value: object) -> str:
+def norm(value):
     return re.sub(r"\s+", " ", str(value).strip()).lower()
 
+def norm_id(value):
+    value = re.sub(r"\.0$", "", str(value).strip())
+    return str(int(value)) if value.isdigit() else value
 
-def normalize_id(value: object) -> str:
-    text = re.sub(r"\.0$", "", str(value).strip())
-    # CSV readers sometimes parse numeric product IDs and drop leading zeroes.
-    return str(int(text)) if text.isdigit() else text
-
-
-def load_map(path: Path):
-    cfg = json.loads(path.read_text(encoding="utf-8"))
-    names = cfg["class_names"]
-    mapping = {norm(k): int(v) for k, v in cfg["article_type_to_class"].items()}
-    if len(names) != 5 or set(mapping.values()) - set(range(5)):
-        raise ValueError("class_map.json harus mendefinisikan lima kelas valid.")
-    return names, mapping
-
-
-def resolve_dataset(dataset_dir: str | None) -> Path:
-    if dataset_dir:
-        root = Path(dataset_dir).expanduser().resolve()
-        if not root.exists():
-            raise FileNotFoundError(root)
-        return root
-    try:
-        import kagglehub
-    except ImportError as exc:
-        raise RuntimeError("kagglehub belum tersedia. Jalankan: pip install -r requirements.txt") from exc
-    print(f"[KAGGLE] Download {DATASET_HANDLE}")
-    print("[KAGGLE] Pastikan akun Kaggle memiliki akses dan autentikasi API telah disiapkan.")
-    return Path(kagglehub.dataset_download(DATASET_HANDLE)).resolve()
-
-
-def locate_catalog(root: Path):
-    candidates = list(root.rglob("*.csv"))
-    preferred = sorted(candidates, key=lambda p: (p.name.lower() != "styles.csv", len(p.parts)))
+def locate(root):
     csv_path, frame = None, None
-    for candidate in preferred:
+    for candidate in sorted(root.rglob("*.csv"), key=lambda p: (p.name.lower() != "styles.csv", len(p.parts))):
         try:
-            probe = pd.read_csv(candidate, nrows=5)
+            sample = pd.read_csv(candidate, nrows=5)
         except Exception:
             continue
-        cols = {str(c).strip().lower() for c in probe.columns}
-        if {"id", "articletype"}.issubset(cols):
+        columns = {str(c).strip().lower() for c in sample.columns}
+        if "id" in columns and "articletype" in columns:
             csv_path = candidate
             frame = pd.read_csv(candidate, low_memory=False)
             break
-    if csv_path is None or frame is None:
-        raise FileNotFoundError("Tidak menemukan CSV katalog dengan kolom id dan articleType.")
-
-    image_dirs = [p for p in root.rglob("*")
-                  if p.is_dir() and p.name.lower() in {"images", "image", "images_small"}]
-    image_dir = image_dirs[0] if image_dirs else root
-    if not any(p.is_file() and p.suffix.lower() in IMAGE_SUFFIXES for p in image_dir.rglob("*")):
-        image_dir = root
+    if frame is None:
+        raise FileNotFoundError("CSV katalog dengan kolom id dan articleType tidak ditemukan.")
+    dirs = [p for p in root.rglob("*") if p.is_dir() and p.name.lower() in {"images", "image", "images_small"}]
+    image_dir = dirs[0] if dirs else root
     return csv_path, image_dir, frame
 
-
-def image_index(image_dir: Path) -> dict[str, Path]:
-    index: dict[str, Path] = {}
-    files = sorted(p for p in image_dir.rglob("*")
-                   if p.is_file() and p.suffix.lower() in IMAGE_SUFFIXES)
-    for path in files:
-        aliases = {path.stem}
-        if path.stem.isdigit():
-            aliases.add(str(int(path.stem)))
-        for alias in aliases:
-            if alias not in index or path.suffix.lower() == ".jpg":
-                index[alias] = path
+def get_image_index(folder):
+    index = {}
+    for path in folder.rglob("*"):
+        if path.is_file() and path.suffix.lower() in IMAGE_SUFFIXES:
+            index[path.stem] = path
+            if path.stem.isdigit():
+                index[str(int(path.stem))] = path
     return index
 
+def main():
+    parser = argparse.ArgumentParser(description="Download dan siapkan Kaggle Fashion Clothing Products Catalog")
+    parser.add_argument("--dataset-dir", default=None, help="Folder dataset yang sudah diekstrak")
+    parser.add_argument("--max-per-class", type=int, default=1000)
+    parser.add_argument("--min-per-class", type=int, default=50)
+    parser.add_argument("--min-width", type=int, default=32)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--overwrite-raw", action="store_true")
+    args = parser.parse_args()
 
-def materialize_dataset(source_root: Path, raw_dir: Path, class_map: Path,
-                        max_per_class: int, min_width: int, seed: int,
-                        overwrite: bool = False) -> Path:
-    """Copy a balanced target-class subset into dataset/raw for local inspection.
+    if args.dataset_dir:
+        source = Path(args.dataset_dir).expanduser().resolve()
+    else:
+        try:
+            import kagglehub
+        except ImportError as exc:
+            raise RuntimeError("Jalankan pip install -r requirements.txt terlebih dahulu.") from exc
+        print("[KAGGLE] Mengunduh " + HANDLE)
+        source = Path(kagglehub.dataset_download(HANDLE)).resolve()
 
-    The full Kaggle archive is not copied into GitHub. Only selected source
-    images are materialized locally; Git ignores the raw image payload.
-    """
-    names, mapping = load_map(class_map)
-    if (raw_dir / "styles.csv").exists() and not overwrite:
-        print(f"[RAW] Dataset lokal sudah ada: {raw_dir}; gunakan --overwrite-raw untuk membangun ulang.")
-        return raw_dir
-
-    csv_path, source_images, frame = locate_catalog(source_root)
+    config = json.loads(MAP.read_text(encoding="utf-8"))
+    names = config["class_names"]
+    class_map = {norm(k): int(v) for k, v in config["article_type_to_class"].items()}
+    csv_path, source_images, frame = locate(source)
     columns = {str(c).strip().lower(): c for c in frame.columns}
     id_col, type_col = columns["id"], columns["articletype"]
-    frame = frame.copy()
-    frame["_source_id"] = frame[id_col].map(normalize_id)
-    frame["_class_id"] = frame[type_col].map(lambda x: mapping.get(norm(x)))
-    frame = frame[frame["_class_id"].notna()].copy()
-    frame["_class_id"] = frame["_class_id"].astype(int)
-    lookup = image_index(source_images)
+    frame["_id"] = frame[id_col].map(norm_id)
+    frame["_class"] = frame[type_col].map(lambda x: class_map.get(norm(x)))
+    frame = frame[frame["_class"].notna()].copy()
+    frame["_class"] = frame["_class"].astype(int)
+    image_index = get_image_index(source_images)
 
-    if raw_dir.exists() and overwrite:
-        shutil.rmtree(raw_dir)
-    images_out = raw_dir / "images"
-    images_out.mkdir(parents=True, exist_ok=True)
+    if (RAW / "styles.csv").exists() and not args.overwrite_raw:
+        print("[RAW] Memakai subset yang sudah ada:", RAW)
+    else:
+        if RAW.exists():
+            shutil.rmtree(RAW)
+        image_out = RAW / "images"
+        image_out.mkdir(parents=True, exist_ok=True)
+        selected, skipped = [], Counter()
+        for class_id in range(5):
+            group = frame[frame["_class"] == class_id].sample(frac=1, random_state=args.seed + class_id)
+            count = 0
+            for _, row in group.iterrows():
+                if count >= args.max_per_class:
+                    break
+                source_image = image_index.get(row["_id"])
+                if source_image is None:
+                    skipped["image_missing"] += 1
+                    continue
+                image = cv2.imread(str(source_image))
+                if image is None:
+                    skipped["image_unreadable"] += 1
+                    continue
+                height, width = image.shape[:2]
+                if min(width, height) < args.min_width:
+                    skipped["below_min_resolution"] += 1
+                    continue
+                filename = row["_id"] + source_image.suffix.lower()
+                shutil.copy2(source_image, image_out / filename)
+                record = row.drop(labels=["_id", "_class"]).to_dict()
+                record["id"] = row["_id"]
+                selected.append((record, class_id, filename, width, height))
+                count += 1
+        if not selected:
+            raise RuntimeError("Tidak ada gambar dari kategori target. Periksa schema katalog dan class_map.json.")
+        pd.DataFrame([x[0] for x in selected]).to_csv(RAW / "styles.csv", index=False)
+        manifest = pd.DataFrame([{
+            "image_id": x[0]["id"], "articleType": x[0].get(type_col, ""),
+            "class_id": x[1], "class_name": names[x[1]], "image_file": x[2],
+            "width": x[3], "height": x[4]} for x in selected])
+        manifest.to_csv(RAW / "manifest.csv", index=False)
+        report = {
+            "source_dataset": HANDLE, "source_catalog": str(csv_path),
+            "class_counts": {names[i]: int((manifest["class_id"] == i).sum()) for i in range(5)},
+            "skipped": dict(skipped),
+            "note": "Subset gambar sumber untuk penggunaan lokal; bukan redistribusi full Kaggle archive."
+        }
+        (RAW / "download_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+        print("[RAW] Gambar sumber disalin ke", image_out)
+        print("[RAW] Distribusi:", report["class_counts"])
 
-    selected, skipped = [], Counter()
-    for class_id in range(5):
-        group = frame[frame["_class_id"] == class_id]
-        if len(group):
-            group = group.sample(frac=1.0, random_state=seed + class_id)
-        accepted = 0
-        for _, row in group.iterrows():
-            if accepted >= max_per_class:
-                break
-            source_id = row["_source_id"]
-            image_path = lookup.get(source_id)
-            if image_path is None:
-                skipped["image_missing"] += 1
-                continue
-            image = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
-            if image is None:
-                skipped["image_unreadable"] += 1
-                continue
-            height, width = image.shape[:2]
-            if min(width, height) < min_width:
-                skipped["below_min_resolution"] += 1
-                continue
-            target_name = f"{source_id}{image_path.suffix.lower()}"
-            shutil.copy2(image_path, images_out / target_name)
-            record = row.drop(labels=["_source_id", "_class_id"]).to_dict()
-            record["id"] = source_id
-            selected.append((record, class_id, target_name, width, height))
-            accepted += 1
+    local_csv, local_images, local_frame = locate(RAW)
+    local_columns = {str(c).strip().lower(): c for c in local_frame.columns}
+    local_id_col, local_type_col = local_columns["id"], local_columns["articletype"]
+    local_frame["_id"] = local_frame[local_id_col].map(norm_id)
+    local_frame["_class"] = local_frame[local_type_col].map(lambda x: class_map.get(norm(x)))
+    local_frame = local_frame[local_frame["_class"].notna()].copy()
+    local_frame["_class"] = local_frame["_class"].astype(int)
+    local_index = get_image_index(local_images)
 
-    if not selected:
-        raise RuntimeError("Tidak ada gambar dari lima kelas target yang berhasil disalin.")
-
-    styles = pd.DataFrame([item[0] for item in selected])
-    styles.to_csv(raw_dir / "styles.csv", index=False)
-    manifest = pd.DataFrame([
-        {"image_id": item[0]["id"], "articleType": item[0].get(type_col, ""),
-         "class_id": item[1], "class_name": names[item[1]], "image_file": item[2],
-         "width": item[3], "height": item[4]}
-        for item in selected
-    ])
-    manifest.to_csv(raw_dir / "manifest.csv", index=False)
-    info = {
-        "source_dataset": DATASET_HANDLE,
-        "source_csv": str(csv_path),
-        "source_images": str(source_images),
-        "materialized_dir": str(raw_dir),
-        "class_counts": {names[i]: int((manifest["class_id"] == i).sum()) for i in range(5)},
-        "skipped": dict(skipped),
-        "note": "Curated local subset of source images; not a redistributed full Kaggle dataset."
-    }
-    (raw_dir / "download_report.json").write_text(
-        json.dumps(info, indent=2, ensure_ascii=False), encoding="utf-8")
-    print("[RAW] Subset Kaggle disalin ke", raw_dir)
-    print("[RAW] Distribusi:", info["class_counts"])
-    return raw_dir
-
-
-def build_dataset(root: Path, out_path: Path, class_map: Path,
-                  max_per_class: int, min_per_class: int, min_width: int):
-    names, mapping = load_map(class_map)
-    csv_path, images_dir, frame = locate_catalog(root)
-    columns = {str(c).strip().lower(): c for c in frame.columns}
-    id_col, type_col = columns["id"], columns["articletype"]
-    frame["_id"] = frame[id_col].map(normalize_id)
-    frame["_type_norm"] = frame[type_col].map(norm)
-    frame["_class"] = frame["_type_norm"].map(mapping)
-    mapped = frame[frame["_class"].notna()].copy()
-    mapped["_class"] = mapped["_class"].astype(int)
-    lookup = image_index(images_dir)
-
-    masks, geoms, labels, ids, types, methods = [], [], [], [], [], []
-    accepted, skipped = Counter(), Counter()
-    mapped = mapped.sort_values(["_class", "_id"], kind="stable")
-    for _, row in mapped.iterrows():
+    masks, geometries, labels, ids, types, methods = [], [], [], [], [], []
+    counts, skipped = Counter(), Counter()
+    for _, row in local_frame.sort_values(["_class", "_id"]).iterrows():
         class_id = int(row["_class"])
-        if accepted[class_id] >= max_per_class:
+        if counts[class_id] >= args.max_per_class:
             continue
-        image_path = lookup.get(row["_id"])
+        image_path = local_index.get(row["_id"])
         if image_path is None:
             skipped["image_missing"] += 1
             continue
-        image = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
+        image = cv2.imread(str(image_path))
         if image is None:
             skipped["image_unreadable"] += 1
             continue
         height, width = image.shape[:2]
-        if min(width, height) < min_width:
+        if min(width, height) < args.min_width:
             skipped["below_min_resolution"] += 1
             continue
         result = preprocess_bgr(image)
@@ -216,42 +165,32 @@ def build_dataset(root: Path, out_path: Path, class_map: Path,
             skipped["mask_failed"] += 1
             continue
         masks.append(result.mask)
-        geoms.append(result.geometry)
+        geometries.append(result.geometry)
         labels.append(class_id)
         ids.append(row["_id"])
-        types.append(str(row[type_col]))
+        types.append(str(row[local_type_col]))
         methods.append(result.method)
-        accepted[class_id] += 1
+        counts[class_id] += 1
 
-    counts = {names[i]: int(accepted[i]) for i in range(5)}
-    out_path.parent.mkdir(parents=True, exist_ok=True)
+    distribution = {names[i]: int(counts[i]) for i in range(5)}
+    OUT.mkdir(parents=True, exist_ok=True)
     report = {
-        "source_dataset": DATASET_HANDLE,
-        "catalog_csv": str(csv_path),
-        "images_dir": str(images_dir),
-        "class_distribution_after_segmentation": counts,
-        "mapped_article_type_counts": {
-            str(k): int(v) for k, v in mapped[type_col].value_counts().items()},
-        "unmapped_article_type_examples": {
-            str(k): int(v) for k, v in frame.loc[frame["_class"].isna(), type_col].value_counts().head(30).items()},
-        "mask_methods": dict(Counter(methods)),
-        "skipped": dict(skipped),
+        "source_dataset": HANDLE, "class_distribution_after_segmentation": distribution,
+        "mask_methods": dict(Counter(methods)), "skipped": dict(skipped),
+        "raw_folder": str(RAW), "minimum_source_resolution": args.min_width
     }
-    out_path.with_suffix(".report.json").write_text(
-        json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
-    pd.DataFrame([{"class_id": i, "class_name": names[i], "processed": accepted[i]}
-                  for i in range(5)]).to_csv(out_path.with_suffix(".distribution.csv"), index=False)
-
-    low = [names[i] for i in range(5) if accepted[i] < min_per_class]
-    if low:
-        raise RuntimeError(
-            f"Sampel hasil segmentasi di bawah minimum {min_per_class}: {low}. "
-            f"Baca laporan {out_path.with_suffix('.report.json')}.")
+    (OUT / "laundry64.report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+    pd.DataFrame([{"class_id": i, "class_name": names[i], "processed": counts[i]} for i in range(5)]).to_csv(
+        OUT / "laundry64.distribution.csv", index=False)
+    missing = [names[i] for i in range(5) if counts[i] < args.min_per_class]
+    if missing:
+        raise RuntimeError("Sampel hasil segmentasi kurang untuk: " + ", ".join(missing) +
+                           ". Periksa laporan dan mapping; jangan membuat sampel palsu.")
 
     np.savez_compressed(
-        out_path,
-        X_mask=np.asarray(masks, dtype=np.uint8)[:, None, :, :],
-        X_geom=np.asarray(geoms, dtype=np.float32),
+        OUT / "laundry64.npz",
+        X_mask=np.asarray(masks, dtype=np.uint8)[:, None],
+        X_geom=np.asarray(geometries, dtype=np.float32),
         y=np.asarray(labels, dtype=np.int64),
         class_names=np.asarray(names),
         image_ids=np.asarray(ids),
@@ -260,61 +199,26 @@ def build_dataset(root: Path, out_path: Path, class_map: Path,
     pd.DataFrame({
         "image_id": ids, "articleType": types, "class_id": labels,
         "class_name": [names[x] for x in labels], "mask_method": methods
-    }).to_csv(out_path.with_suffix(".manifest.csv"), index=False)
-    print("[PROCESSED]", counts, "shape=", len(labels), "saved=", out_path)
-    return out_path
+    }).to_csv(OUT / "laundry64.manifest.csv", index=False)
 
-
-def make_preview(npz_path: Path, out_path: Path, samples_per_class: int = 8):
-    archive = np.load(npz_path, allow_pickle=False)
-    masks, labels, names = archive["X_mask"][:, 0], archive["y"], archive["class_names"].tolist()
-    rows = []
+    archive = np.load(OUT / "laundry64.npz", allow_pickle=False)
+    preview_rows = []
     for class_id, class_name in enumerate(names):
         tiles = []
-        for idx in np.where(labels == class_id)[0][:samples_per_class]:
-            tile = cv2.resize(masks[idx] * 255, (112, 112), interpolation=cv2.INTER_NEAREST)
+        for idx in np.where(archive["y"] == class_id)[0][:8]:
+            tile = cv2.resize(archive["X_mask"][idx, 0] * 255, (112, 112), interpolation=cv2.INTER_NEAREST)
             tile = cv2.cvtColor(tile, cv2.COLOR_GRAY2BGR)
-            cv2.putText(tile, class_name[:16], (3, 105), cv2.FONT_HERSHEY_SIMPLEX, .32, (0, 0, 255), 1)
+            cv2.putText(tile, class_name, (3, 105), cv2.FONT_HERSHEY_SIMPLEX, .32, (0, 0, 255), 1)
             tiles.append(tile)
         if tiles:
-            while len(tiles) < samples_per_class:
+            while len(tiles) < 8:
                 tiles.append(np.zeros_like(tiles[0]))
-            rows.append(np.hstack(tiles))
-    if rows:
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        cv2.imwrite(str(out_path), np.vstack(rows))
-
-
-def main():
-    parser = argparse.ArgumentParser(description=f"Download and prepare Kaggle {DATASET_HANDLE}")
-    parser.add_argument("--dataset-dir", default=None,
-                        help="Folder dataset lengkap lokal (berisi CSV katalog dan folder gambar)")
-    parser.add_argument("--class-map", type=Path, default=DEFAULT_MAP)
-    parser.add_argument("--raw-dir", type=Path, default=DEFAULT_RAW,
-                        help="Subset dataset yang akan terlihat di dataset/raw/")
-    parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
-    parser.add_argument("--max-per-class", type=int, default=1000,
-                        help="Maksimum gambar sumber per kelas yang disalin")
-    parser.add_argument("--min-per-class", type=int, default=50,
-                        help="Minimum gambar lolos segmentasi per kelas")
-    parser.add_argument("--min-width", type=int, default=32,
-                        help="Lebar dan tinggi minimum gambar sumber")
-    parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--overwrite-raw", action="store_true",
-                        help="Bangun ulang subset lokal dataset/raw yang sudah ada")
-    args = parser.parse_args()
-
-    source_root = resolve_dataset(args.dataset_dir)
-    raw_root = materialize_dataset(
-        source_root, args.raw_dir, args.class_map, args.max_per_class,
-        args.min_width, args.seed, overwrite=args.overwrite_raw)
-    out = build_dataset(raw_root, args.out, args.class_map,
-                        max_per_class=args.max_per_class,
-                        min_per_class=args.min_per_class,
-                        min_width=args.min_width)
-    make_preview(out, out.parent / "mask_preview.png")
-    print("[DONE] Periksa dataset/raw/.../images dan dataset/processed/mask_preview.png.")
-
+            preview_rows.append(np.hstack(tiles))
+    if preview_rows:
+        cv2.imwrite(str(OUT / "mask_preview.png"), np.vstack(preview_rows))
+    print("[DONE] Raw images:", RAW / "images")
+    print("[DONE] Processed dataset:", OUT / "laundry64.npz")
+    print("[DONE] Preview:", OUT / "mask_preview.png")
 
 if __name__ == "__main__":
     main()
