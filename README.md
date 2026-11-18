@@ -18,41 +18,41 @@ Foto berukuran besar tidak di-commit otomatis ke GitHub. Folder dan dokumentasi 
 | 3 | Celana Dalam | Briefs, Boxers, Trunk |
 | 4 | Kaus Dalam | Innerwear Vests, Camisoles |
 
-Mapping bisa diedit di `algoritma/class_map.json`. Jika kelas tidak tersedia atau jumlah hasil segmentasi kurang dari minimum, program berhenti dengan laporan—tidak membuat sampel palsu.
+Mapping bisa diedit di `algoritma/class_map.json`. Downloader mencoba nama kolom umum untuk ID produk (`id`, `ProductId`, `product_id`) dan tipe pakaian (`articleType`, `ProductType`, `category`, dan variasinya). Nilai kategori tetap harus cocok dengan pemetaan di `class_map.json`; jika tidak tersedia, program berhenti dengan laporan, bukan membuat sampel palsu.
 
 ## Instalasi dan download
 
 Gunakan Python 3.10+.
 
-~~~powershell
+```powershell
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-~~~
+```
 
 Siapkan autentikasi Kaggle API/KaggleHub dan pastikan akun mendapat akses ke dataset. Jalankan dari root repo:
 
-~~~bash
+```bash
 python -m algoritma.prepare_dataset
-~~~
+```
 
 Untuk dataset yang sudah diunduh manual:
 
-~~~bash
+```bash
 python -m algoritma.prepare_dataset --dataset-dir D:/datasets/fashion-clothing-products-catalog
-~~~
+```
 
 Default: gambar sumber minimal 32×32, mask 64×64, maksimum 1.000 gambar per kelas, minimum 50 gambar lolos segmentasi per kelas. Periksa manifest di dataset/raw, distribusi, dan dataset/processed/mask_preview.png sebelum training.
 
 ## Training
 
-~~~bash
+```bash
 python -m algoritma.train --epochs 40 --batch-size 32
 python -m algoritma.predict path/to/clothing.jpg
 python -m unittest discover -s algoritma -p test_*.py -v
-~~~
+```
 
-CNN Python memakai tiga convolutional blocks, GAP 32 fitur, empat fitur geometri, lalu classifier 36→64→5. Fitur geometri: normalized area, normalized aspect ratio, bounding-box occupancy, lower two-run score. Foto katalog tidak sama dengan pakaian di conveyor; validasi akhir perlu foto conveyor/lightbox.
+CNN Python memakai tiga convolutional blocks, GAP 32 fitur, empat fitur geometri, lalu classifier 36→64→5. Fitur geometri: normalized area, normalized aspect ratio, bounding-box occupancy, lower two-run score. Foto katalog tidak sama dengan pakaian di conveyor; validasi akhir perlu memakai foto conveyor/lightbox.
 
 ## Hardware target
 
