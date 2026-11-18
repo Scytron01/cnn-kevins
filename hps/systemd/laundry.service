@@ -1,0 +1,16 @@
+[Unit]
+Description=Smart Laundry standalone classifier and VGA dashboard
+After=local-fs.target systemd-udev-settle.service
+Wants=systemd-udev-settle.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/cnn-kevins
+ExecStart=/usr/bin/python3 -m hps.app.laundry_app --config /opt/cnn-kevins/hps/config/de10_standard.json --source both
+Restart=on-failure
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
