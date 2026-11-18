@@ -154,11 +154,11 @@ Artefak eksperimen disimpan di \`report/runs/laundry_shape_cnn/\`:
 - \`history.json\`: loss training dan metrik validation per epoch.
 - \`confusion_matrix.csv/png\`: confusion matrix.
 
-Angka performa baru boleh dicantumkan setelah training dijalankan pada dataset Kaggle yang sesungguhnya. Foto katalog juga berbeda domain dari pakaian di conveyor; pengujian tambahan dengan foto kamera/lightbox diperlukan.
+Angka performa baru boleh dicantumkan setelah training dijalankan pada dataset Kaggle yang sesungguhnya. Foto katalog merupakan gambar produk dengan kondisi studio; pengujian tambahan tetap perlu dilakukan pada foto nyata yang akan dimasukkan melalui USB/MicroSD, termasuk variasi latar, pencahayaan, sudut, dan posisi pakaian.
 
 ---
 
-## 3. Arsitektur target FPGA Cyclone V
+## 3. Arsitektur standalone DE10-Standard (HPS + FPGA)
 
 ### 3.1 Diagram arsitektur hardware
 
@@ -229,7 +229,7 @@ Alamat CSR menggunakan word address.
 | 3 | Two-run rows | jumlah baris di rentang bawah bounding box yang memiliki tepat dua run |
 | 4 | Width/height | \`[height, width]\`, masing-masing 8 bit |
 
-Avalon-ST menggunakan sinyal \`valid/data/startofpacket/endofpacket/ready\`. Pada konfigurasi default, sebuah frame mask berukuran 64×64 piksel biner. Sumber stream untuk kamera dan segmentasi belum dibuat; testbench saat ini menjadi sumber stream untuk simulasi.
+Avalon-ST menggunakan sinyal \`valid/data/startofpacket/endofpacket/ready\`. Pada konfigurasi default, sebuah frame mask berukuran 64×64 piksel biner. Geometry IP ini merupakan jalur eksperimen terpisah; pada mode foto standalone, HPS menghitung mask dan geometri lalu mengirimkannya melalui CNN Avalon-MM wrapper. Testbench geometry IP tetap menggunakan mask sintetis untuk simulasi.
 
 ### 3.3 Perbedaan status saat ini dan target akhir
 
@@ -246,7 +246,7 @@ Avalon-ST menggunakan sinyal \`valid/data/startofpacket/endofpacket/ready\`. Pad
 | HPS Linux USB/MicroSD browser + inventory app | Source Python tersedia; perlu HPS Linux image, alamat MMIO, dan cache-coherency mapping |
 | Avalon-MM CSR + testbench geometri | Source tersedia; verifikasi simulator target masih diperlukan |
 | Firmware C telemetry | Contoh source tersedia; bukan classifier CNN |
-| Camera capture + hardware segmentation | Tidak digunakan pada mode terpilih; foto dimuat dari USB/MicroSD dan disegmentasi di HPS |
+| Input foto file-based | Foto JPG/PNG dibaca dari USB/MicroSD oleh HPS; tidak menggunakan kamera atau conveyor |\n| HPS photo browser + dashboard | Source tersedia; menampilkan foto aktif, hasil CNN, dan jumlah barang per kategori |
 | Fixed-point/INT8 weight exporter | Script tersedia; hasil bobot aktual memerlukan checkpoint training |
 | Conv1–Conv3, ReLU, pooling, GAP pada RTL | Serial reference RTL tersedia; belum diverifikasi bit-exact atau disintesis |
 | FC/ArgMax lima kelas | RTL reference tersedia; confidence threshold dan aktuator tidak termasuk mode foto-inventaris |
@@ -405,11 +405,50 @@ RTL ini masih reference serial accelerator. Optimasi RAM sinkron, bit-exact gold
 
 ---
 
-## 9. Mode standalone DE10-Standard: USB + MicroSD + VGA
+## 9. Mode standalone berbasis foto: USB/MicroSD + VGA
 
-Target operasi yang dipilih adalah satu foto untuk satu pakaian, dengan dua sumber media (USB flash drive dan MicroSD) dan tampilan langsung pada monitor VGA. Setelah bitstream FPGA dan HPS Linux image dipasang, proses browse/klasifikasi/inventaris tidak membutuhkan laptop.
+Sistem yang dituju adalah alat klasifikasi dan pencatatan inventaris berbasis foto pada DE10-Standard. Tidak ada kamera, webcam, atau conveyor. Satu file foto mewakili satu pakaian. Laptop hanya dipakai bila perlu untuk menyiapkan dataset/model atau menyalin foto baru ke USB/MicroSD. Setelah media dipasang dan board dinyalakan, pemilihan foto, klasifikasi, pembaruan inventaris, dan tampilan dilakukan langsung oleh DE10-Standard tanpa laptop.
 
-### Pembagian tugas HPS dan FPGA
+### Diagram alur penggunaan
+
+~~~mermaid
+flowchart TD
+    LAPTOP["Laptop (opsional)<br/>Siapkan foto JPG/PNG"] --> COPY["Salin foto ke LAUNDRY/images/"]
+    COPY --> USB["USB flash drive"]
+    COPY --> SD["MicroSD"]
+    USB --> MOUNT
+    SD --> MOUNT
+
+    subgraph BOARD["DE10-Standard — standalone"]
+      subgraph HPS["HPS ARM + Linux"]
+        MOUNT["Mount media dan daftar foto"]
+        SELECT["Pilih foto aktif<br/>KEY0 / KEY1"]
+        PRE["Decode + preprocessing<br/>Mask 64x64 + 4 fitur"]
+        APP["Kontrol aplikasi"]
+        INV["Inventaris persisten<br/>Foto / nama file / kategori"]
+        COUNT["Hitung barang per kategori"]
+        UI["Dashboard monitor<br/>Foto aktif + list + jumlah"]
+        MOUNT --> SELECT --> PRE --> APP
+        APP --> INV --> COUNT --> UI
+        SELECT --> UI
+      end
+      subgraph FABRIC["FPGA fabric"]
+        BUTTON["KEY/SW controller"]
+        CNNIF["CNN Avalon-MM"]
+        CNN["CNN INT8 + ArgMax"]
+        SDRAM["Framebuffer RGB565"]
+        VGA["VGA DMA + timing"]
+        CNNIF --> CNN
+        BUTTON --> APP
+        APP --> CNNIF
+        CNN --> APP
+        UI --> SDRAM --> VGA
+      end
+      VGA --> MONITOR["Monitor eksternal"]
+    end
+~~~
+
+
 
 ~~~mermaid
 flowchart TD
