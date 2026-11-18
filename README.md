@@ -246,7 +246,8 @@ Avalon-ST menggunakan sinyal \`valid/data/startofpacket/endofpacket/ready\`. Pad
 | HPS Linux USB/MicroSD browser + inventory app | Source Python tersedia; perlu HPS Linux image, alamat MMIO, dan cache-coherency mapping |
 | Avalon-MM CSR + testbench geometri | Source tersedia; verifikasi simulator target masih diperlukan |
 | Firmware C telemetry | Contoh source tersedia; bukan classifier CNN |
-| Input foto file-based | Foto JPG/PNG dibaca dari USB/MicroSD oleh HPS; tidak menggunakan kamera atau conveyor |\n| HPS photo browser + dashboard | Source tersedia; menampilkan foto aktif, hasil CNN, dan jumlah barang per kategori |
+| Input foto file-based | Foto JPG/PNG dibaca dari USB/MicroSD oleh HPS; tidak menggunakan kamera atau conveyor |
+| HPS photo browser + dashboard | Source tersedia; menampilkan foto aktif, hasil CNN, dan jumlah barang per kategori |
 | Fixed-point/INT8 weight exporter | Script tersedia; hasil bobot aktual memerlukan checkpoint training |
 | Conv1–Conv3, ReLU, pooling, GAP pada RTL | Serial reference RTL tersedia; belum diverifikasi bit-exact atau disintesis |
 | FC/ArgMax lima kelas | RTL reference tersedia; confidence threshold dan aktuator tidak termasuk mode foto-inventaris |
@@ -332,7 +333,7 @@ Project top-level Quartus (\`.qpf/.qsf\`), pin assignment, dan clock constraint 
 
 ---
 
-## 6. Roadmap menuju CNN di FPGA
+## 6. Roadmap menuju sistem standalone DE10-Standard
 
 1. **Tetapkan target board:** tentukan model board dan exact Cyclone V part number, clock, reset, dan pin I/O.
 2. **Validasi geometri RTL:** jalankan ModelSim, perbaiki isu testbench/RTL, dan impor custom IP ke Platform Designer.
@@ -341,7 +342,7 @@ Project top-level Quartus (\`.qpf/.qsf\`), pin assignment, dan clock constraint 
 5. **Implementasi CNN RTL:** Conv1–Conv3, ReLU, pooling, Global Average Pooling, dan penyimpanan feature maps.
 6. **Implementasi classifier:** gabungkan empat fitur geometri, jalankan FC dan ArgMax untuk lima kelas.
 7. **Verifikasi bit-exact:** bandingkan output setiap layer dan kelas akhir antara Python golden model dengan ModelSim.
-8. **Integrasi Nios V dan aktuator:** hanya setelah dukungan processor IP untuk toolchain/board terkonfirmasi.
+8. **Integrasi aplikasi HPS dan media:** uji mount USB/MicroSD, navigasi foto, transfer mask ke CNN, inventaris persisten, dan update framebuffer VGA pada board.
 9. **Sintesis dan uji fisik:** ukur ALM, M10K, DSP, timing, latency, dan hasil klasifikasi pada board.
 
 **Kriteria selesai FPGA:** proyek baru dapat disebut berjalan pada FPGA setelah RTL CNN lengkap, simulasi bit-exact lulus, Quartus synthesis dan timing berhasil, serta uji pada board target dilakukan. Sampai hasil itu tersedia, jangan mencantumkan klaim akurasi hardware, speedup, resource utilization, atau timing closure.
