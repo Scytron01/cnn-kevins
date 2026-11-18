@@ -4,8 +4,6 @@
 
 Proyek ini mengembangkan sistem klasifikasi pakaian laundry menjadi lima kelas berdasarkan siluet. Dataset sumber berasal dari [Fashion Clothing Products Catalog — Kaggle](https://www.kaggle.com/datasets/shivamb/fashion-clothing-products-catalog/data) (`shivamb/fashion-clothing-products-catalog`). Pipeline Python digunakan untuk menyiapkan dataset, melatih CNN, mengevaluasi model, dan menguji prediksi. Bagian FPGA diarahkan ke Intel Cyclone V melalui Quartus Prime Lite, ModelSim-Altera, dan Ashling RiscFree.
 
-> **Pemisahan status implementasi:** pipeline dataset dan CNN Python tersedia. RTL yang tersedia saat ini baru geometry extractor streaming dan contoh firmware telemetry. CNN accelerator fixed-point/INT8 belum diimplementasikan atau diverifikasi pada FPGA. Diagram hardware di bawah menggambarkan target integrasi dan memberi tanda pada blok yang masih direncanakan.
-
 ---
 
 ## 1. Gambaran umum sistem
