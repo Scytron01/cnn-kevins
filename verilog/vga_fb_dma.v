@@ -35,8 +35,8 @@ module vga_fb_dma #(
     assign vga_sync_n=1'b0; // separate H/V sync mode for the DE10-Standard VGA DAC
     always @* begin
         avm_read=(dma_state==DMA_REQ);
-        avm_address=FRAMEBUFFER_BASE_WORD+(fetch_line*32'd320);
-        avm_burstcount=9'd320;
+        avm_address=FRAMEBUFFER_BASE_WORD+(fetch_line*32'd320)+read_word_count;
+        avm_burstcount=9'd1;
     end
     always @(posedge clk_50 or negedge reset_n) begin
         if(!reset_n) begin
@@ -70,7 +70,10 @@ module vga_fb_dma #(
                         line_ready[fetch_line[0]]<=1;
                         if(fetch_line==0) frame_ready<=1;
                         dma_state<=DMA_IDLE;
-                    end else read_word_count<=read_word_count+1'b1;
+                    end else begin
+                        read_word_count<=read_word_count+1'b1;
+                        dma_state<=DMA_REQ;
+                    end
                 end
                 default: dma_state<=DMA_IDLE;
             endcase
