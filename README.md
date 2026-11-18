@@ -10,7 +10,7 @@ Sistem otomatisasi penyortiran pakaian kotor berbasis **Computer Vision** dan **
 
 ---
 
-## 📋 Daftar Isi
+## Daftar Isi
 - [Latar Belakang Proyek](#-latar-belakang-proyek)
 - [Kelas Klasifikasi Pakaian](#-kelas-klasifikasi-pakaian)
 - [Alur Kerja Sistem (End-to-End Pipeline)](#-alur-kerja-sistem-end-to-end-pipeline)
