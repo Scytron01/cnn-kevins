@@ -75,23 +75,48 @@ Model \`LaundryShapeCNN\` menerima dua input: mask siluet satu channel berukuran
 
 ~~~mermaid
 flowchart LR
-    A["Binary mask<br/>1 x 64 x 64"]
-    B["Conv2D 3 x 3<br/>1 ke 8 channel<br/>ReLU + MaxPool 2 x 2"]
-    C["Feature map<br/>8 x 32 x 32"]
-    D["Conv2D 3 x 3<br/>8 ke 16 channel<br/>ReLU + MaxPool 2 x 2"]
-    E["Feature map<br/>16 x 16 x 16"]
-    F["Conv2D 3 x 3<br/>16 ke 32 channel<br/>ReLU + MaxPool 2 x 2"]
-    G["Feature map<br/>32 x 8 x 8"]
-    H["Global Average Pooling<br/>32 nilai"]
-    I["Concatenate<br/>36 fitur"]
-    J["Linear 36 ke 64<br/>ReLU + Dropout 0.25"]
-    K["Linear 64 ke 5<br/>logits"]
-    L["Softmax<br/>confidence prediksi"]
-    GEO["4 fitur geometri<br/>area, aspect ratio,<br/>bbox occupancy, lower two-run"]
+    IN["Input mask siluet<br/>64 x 64 x 1"]
 
-    A --> B --> C --> D --> E --> F --> G --> H --> I
-    GEO --> I
-    I --> J --> K --> L
+    C1["Conv Layer 1<br/>3 x 3 kernel<br/>8 filters"]
+    R1["ReLU"]
+    P1["Max Pooling<br/>2 x 2"]
+    F1["Feature map<br/>8 x 32 x 32"]
+
+    C2["Conv Layer 2<br/>3 x 3 kernel<br/>16 filters"]
+    R2["ReLU"]
+    P2["Max Pooling<br/>2 x 2"]
+    F2["Feature map<br/>16 x 16 x 16"]
+
+    C3["Conv Layer 3<br/>3 x 3 kernel<br/>32 filters"]
+    R3["ReLU"]
+    P3["Max Pooling<br/>2 x 2"]
+    F3["Feature map<br/>32 x 8 x 8"]
+
+    GAP["Global Average Pooling<br/>32 features"]
+    GEO["4 geometry features<br/>area_norm<br/>aspect_norm<br/>bbox_occupancy<br/>lower_two_run_score"]
+    CAT["Concatenate<br/>32 + 4 = 36 features"]
+    FC1["Dense Layer 1<br/>36 to 64 neurons<br/>ReLU + Dropout 0.25"]
+    FC2["Output Dense Layer<br/>64 to 5 logits"]
+    SOFT["Softmax<br/>confidence (Python)"]
+    OUT["Predicted class<br/>0 Baju<br/>1 Celana<br/>2 Jaket<br/>3 Celana Dalam<br/>4 Kaus Dalam"]
+
+    IN --> C1 --> R1 --> P1 --> F1 --> C2
+    C2 --> R2 --> P2 --> F2 --> C3
+    C3 --> R3 --> P3 --> F3 --> GAP
+    GAP --> CAT
+    GEO --> CAT
+    CAT --> FC1 --> FC2 --> SOFT --> OUT
+
+    classDef conv fill:#ff9d00,stroke:#9a5a00,color:#171717,stroke-width:1.5px
+    classDef pool fill:#ff4b4b,stroke:#9c2020,color:#171717,stroke-width:1.5px
+    classDef dense fill:#78b45a,stroke:#356b2c,color:#101010,stroke-width:1.5px
+    classDef output fill:#243eff,stroke:#11208a,color:#ffffff,stroke-width:1.5px
+    classDef tensor fill:#eef2f7,stroke:#53657d,color:#172033
+    class C1,C2,C3 conv
+    class P1,P2,P3 pool
+    class FC1,FC2 dense
+    class SOFT,OUT output
+    class IN,F1,F2,F3,GAP,GEO,CAT tensor
 ~~~
 
 | Tahap | Operasi | Ukuran keluaran |
