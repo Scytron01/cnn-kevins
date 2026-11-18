@@ -12,7 +12,7 @@ Sistem dibagi menjadi tiga tahap besar:
 
 1. **Pengembangan model (PC):** mengambil dataset Kaggle, memetakan label, membuat siluet dan fitur geometri, kemudian melatih CNN.
 2. **Inferensi (PC / validasi awal):** foto pakaian diproses dengan preprocessing yang sama dan dimasukkan ke checkpoint CNN untuk menghasilkan kelas serta confidence.
-3. **Implementasi FPGA (target):** data masker biner dikirim sebagai stream ke geometry IP dan, pada tahap berikutnya, ke CNN accelerator fixed-point. Hanya geometry IP yang sudah mempunyai RTL saat ini.
+3. **Implementasi standalone DE10-Standard (tahap integrasi):** HPS ARM Linux membaca foto dari USB/MicroSD, melakukan decoding dan preprocessing, lalu mengirim mask serta fitur geometri ke CNN accelerator Verilog melalui Avalon-MM. FPGA fabric menyediakan kontrol tombol dan scanout VGA. Source HPS/RTL integrasi sudah ditambahkan, tetapi Platform Designer, alamat fisik, synthesis, dan uji board masih perlu dikerjakan.
 
 ### Diagram alur sistem end-to-end
 
@@ -231,13 +231,18 @@ Avalon-ST menggunakan sinyal \`valid/data/startofpacket/endofpacket/ready\`. Pad
 | Preprocessing siluet + empat fitur geometri Python | Tersedia |
 | Training, evaluasi, dan prediksi CNN Python | Tersedia |
 | Avalon-ST geometry extractor | RTL tersedia; perlu simulasi dan integrasi Quartus pada mesin target |
+| CNN Conv1–Conv3 + GAP + FC + ArgMax reference core | RTL serial INT8 tersedia; bobot ROM perlu diekspor dan bit-exact test masih pending |
+| CNN Avalon-MM input/control wrapper | Source RTL + component descriptor tersedia; belum diuji pada Platform Designer board |
+| KEY/SW debouncer dan register | Source RTL + component descriptor tersedia; belum diuji pada pin DE10 |
+| VGA 640x480 RGB565 framebuffer DMA | Source RTL + component descriptor tersedia; perlu SDRAM map, PLL/monitor, dan uji board |
+| HPS Linux USB/MicroSD browser + inventory app | Source Python tersedia; perlu HPS Linux image, alamat MMIO, dan cache-coherency mapping |
 | Avalon-MM CSR + testbench geometri | Source tersedia; verifikasi simulator target masih diperlukan |
 | Firmware C telemetry | Contoh source tersedia; bukan classifier CNN |
-| Camera capture + hardware segmentation | Belum dibuat |
-| Fixed-point/INT8 weight exporter | Belum dibuat |
-| Conv1–Conv3, ReLU, pooling, GAP pada RTL | Belum dibuat |
-| FC/ArgMax lima kelas dan kontrol aktuator | Belum dibuat |
-| Bit-exact comparison Python vs RTL | Belum dibuat |
+| Camera capture + hardware segmentation | Tidak digunakan pada mode terpilih; foto dimuat dari USB/MicroSD dan disegmentasi di HPS |
+| Fixed-point/INT8 weight exporter | Script tersedia; hasil bobot aktual memerlukan checkpoint training |
+| Conv1–Conv3, ReLU, pooling, GAP pada RTL | Serial reference RTL tersedia; belum diverifikasi bit-exact atau disintesis |
+| FC/ArgMax lima kelas | RTL reference tersedia; confidence threshold dan aktuator tidak termasuk mode foto-inventaris |
+| Bit-exact comparison Python vs RTL | Belum dibuat; prioritas sebelum hasil inventaris dipercaya |
 | Quartus synthesis, timing, resource report, board test | Belum dilakukan |
 
 ---
@@ -388,3 +393,95 @@ Exporter membaca checkpoint best_model.pt, memakai laundry64.npz untuk kalibrasi
 ROM .mem yang disertakan saat ini adalah placeholder nol, bukan bobot training. Export bobot aktual setelah checkpoint model tersedia. Testbench verilog/tb_cnn_top.v memeriksa alur satu frame hingga prediksi keluar, bukan akurasi model. Simulasi perlu dijalankan melalui verilog/run_cnn.do atau GitHub Actions.
 
 RTL ini masih reference serial accelerator. Optimasi RAM sinkron, bit-exact golden model, Quartus synthesis, timing, dan uji pada board Cyclone V belum dilakukan.
+
+
+---
+
+## 9. Mode standalone DE10-Standard: USB + MicroSD + VGA
+
+Target operasi yang dipilih adalah satu foto untuk satu pakaian, dengan dua sumber media (USB flash drive dan MicroSD) dan tampilan langsung pada monitor VGA. Setelah bitstream FPGA dan HPS Linux image dipasang, proses browse/klasifikasi/inventaris tidak membutuhkan laptop.
+
+### Pembagian tugas HPS dan FPGA
+
+~~~mermaid
+flowchart TD
+    USB["USB Flash Drive<br/>JPG / PNG"] --> MEDIA
+    SD["MicroSD<br/>OS + foto + inventory.json"] --> MEDIA
+    subgraph HPS_SYS["HPS ARM Cortex-A9 + Linux"]
+      MEDIA["Media Browser<br/>USB + MicroSD"]
+      DEC["JPEG/PNG Decode"]
+      PRE["OpenCV Preprocessing<br/>silhouette 64x64 + 4 geometry features"]
+      APP["Inventory Manager<br/>SHA-256 dedup + JSON"]
+      UI["Pillow UI Renderer<br/>RGB565 640x480"]
+      MEDIA --> DEC --> PRE
+      APP --> UI
+    end
+    subgraph FPGA["Cyclone V FPGA Fabric"]
+      CSR["CNN Avalon-MM Slave<br/>mask RAM + geometry + START/DONE"]
+      CNN["CNN INT8 Accelerator<br/>Conv1-3 / GAP / FC / ArgMax"]
+      KEY["KEY/SW Controller<br/>KEY0..KEY3 + SW"]
+      DMA["VGA Framebuffer DMA<br/>RGB565 scanout"]
+      CSR --> CNN
+      KEY --> CSR
+    end
+    PRE -->|"H2F bridge: 128 mask words + Q7 geometry"| CSR
+    CNN -->|"class_id + cycle count"| APP
+    UI -->|"shared FPGA SDRAM framebuffer"| DMA
+    DMA --> VGA["VGA Monitor"]
+    KEY -->|"button events / source filter"| MEDIA
+~~~
+
+**HPS** membaca foto dari media removable, melakukan decoding JPEG/PNG, memanggil preprocessing yang sama dengan pipeline training, mengirim 4096 bit mask dan empat fitur geometri ke FPGA, menyimpan barang yang dikonfirmasi ke inventaris, dan membuat dashboard RGB565.
+
+**FPGA** menerima mask melalui CNN Avalon-MM wrapper, menjalankan inferensi, menyediakan KEY/SW register, dan membaca framebuffer dari FPGA SDRAM untuk keluaran VGA.
+
+Nios V telemetry source yang sudah ada tetap dipertahankan. Pada mode standalone ini, pengelolaan filesystem dan gambar dikerjakan oleh HPS ARM Linux karena HPS memiliki antarmuka USB/SD dan lingkungan Linux; Nios V bersifat opsional untuk peripheral/control tambahan, bukan host aplikasi Linux.
+
+### Tombol dan switch
+
+| Kontrol DE10-Standard | Fungsi |
+|---|---|
+| KEY0 | Foto sebelumnya |
+| KEY1 | Foto berikutnya |
+| KEY2 | Jalankan klasifikasi FPGA |
+| KEY3 | Konfirmasi dan tambahkan ke inventaris |
+| SW[1:0] = 00 | Tampilkan foto dari USB dan MicroSD |
+| SW[1:0] = 01 | Filter USB |
+| SW[1:0] = 10 | Filter MicroSD |
+
+KEY3 hanya menyimpan foto yang sudah diklasifikasi. Hash SHA-256 dipakai untuk mencegah file identik dihitung berulang. Inventaris disimpan di MicroSD bila writable, atau fallback ke home directory HPS.
+
+### Peta folder tambahan
+
+Nama folder lama (algoritma, dataset, report, verilog, Reference) tetap dipertahankan. Folder tambahan:
+- hps/: aplikasi HPS Linux, konfigurasi alamat board, systemd service, dan unit tests.
+- quartus/: panduan Platform Designer dan koneksi board; file QSF/QPF tidak dibuat dengan pin/alamat tebakan.
+- verilog/: CNN Avalon wrapper, KEY/SW controller, VGA timing/DMA, dan testbench.
+
+### Menjalankan aplikasi HPS
+
+1. Bangun Platform Designer system sesuai panduan quartus/README.md.
+2. Salin hps/config/de10_standard.example.json menjadi hps/config/de10_standard.json.
+3. Isi alamat CPU fisik dari generated system.sopcinfo/HPS device tree. Jangan menggunakan alamat Avalon word sebagai alamat /dev/mem.
+4. Install Python, NumPy, OpenCV, Pillow di HPS Linux; mount USB dan MicroSD.
+5. Jalankan dari root repository:
+
+~~~bash
+sudo python3 -m hps.app.laundry_app --config hps/config/de10_standard.json --source both
+~~~
+
+6. KEY0/KEY1 browse foto, KEY2 klasifikasi, KEY3 konfirmasi inventaris. SW[1:0] memilih sumber media.
+
+Petunjuk rinci ada di hps/README.md dan report/DE10_STANDALONE_RUNTIME.md.
+
+### Batas integrasi yang masih harus diselesaikan
+
+Source HPS/RTL telah ditambahkan, tetapi proyek belum dinyatakan berjalan penuh pada DE10-Standard. Hal yang masih memerlukan konfigurasi board/validasi:
+- HPS Linux image, device tree, mount USB/SD, dan alamat CPU fisik hasil Platform Designer.
+- FPGA SDRAM controller bersama untuk HPS framebuffer write dan VGA DMA read; ukuran framebuffer 614,400 bytes.
+- Cache/coherency untuk shared framebuffer; /dev/mem hanya jalur bring-up awal, bukan solusi production.
+- QSF pin assignment/SDC, clock VGA (nominal 25 MHz; monitor tertentu memerlukan 25.175 MHz PLL), timing, dan Quartus synthesis.
+- Bobot CNN aktual: ROM yang ada masih placeholder nol hingga training dan exporter dijalankan.
+- Bit-exact test Python-vs-Verilog, simulasi ModelSim/Icarus lengkap, serta uji fisik pada board.
+
+Sistem ini adalah single-label classifier: satu foto sebaiknya berisi satu pakaian. Foto berisi beberapa pakaian memerlukan object detection/instance segmentation dan tidak dihitung sebagai beberapa item oleh model sekarang.

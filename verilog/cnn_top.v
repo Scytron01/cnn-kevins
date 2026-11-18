@@ -11,7 +11,7 @@ module cnn_top (
     reg [4:0] state;
     reg [12:0] load_count;
     reg [31:0] geometry_latched;
-    reg signed [7:0] input_mem [0:4095];
+    reg input_mem [0:4095];
     reg signed [7:0] act1_mem [0:8191];
     reg signed [7:0] act2_mem [0:4095];
     reg signed [7:0] act3_mem [0:2047];
@@ -119,7 +119,7 @@ module cnn_top (
             case (layer)
                 2'd1: begin
                     conv_input_addr=(conv_y*64)+conv_x;
-                    conv_input_value=input_mem[conv_input_addr];
+                    conv_input_value=input_mem[conv_input_addr] ? 8'sd1 : 8'sd0;
                     conv_weight_value=conv1_w[conv_weight_addr];
                     conv_bias_value=conv1_b[out_ch];
                     conv_multiplier=conv1_mul_mem[0];
@@ -170,6 +170,9 @@ module cnn_top (
     reg [31:0] fc_multiplier;
     wire signed [7:0] mac_activation,mac_weight;
     wire signed [15:0] mac_product;
+    wire signed [15:0] conv_mac_product;
+    assign conv_mac_product = (layer == 2'd1) ?
+        (conv_input_value[0] ? {{8{conv_weight_value[7]}}, conv_weight_value} : 16'sd0) : mac_product;
     assign mac_activation=(state==S_MAC)?conv_input_value:fc_input_value;
     assign mac_weight=(state==S_MAC)?conv_weight_value:fc_weight_value;
     cnn_mac_unit u_serial_mac(.activation(mac_activation),.weight(mac_weight),.product(mac_product));
@@ -208,7 +211,7 @@ module cnn_top (
             case (state)
                 S_IDLE: if (start) begin geometry_latched<=geometry_q7; load_count<=0; state<=S_LOAD; end
                 S_LOAD: if (in_valid) begin
-                    input_mem[load_count]<=in_pixel?8'sd127:8'sd0;
+                    input_mem[load_count]<=in_pixel;
                     if (load_count==13'd4095) begin
                         layer<=1; pool_x<=0; pool_y<=0; out_ch<=0;
                         sub_x<=0; sub_y<=0; conv_max<=0; state<=S_LAYER_SETUP;
@@ -216,15 +219,26 @@ module cnn_top (
                 end
                 S_LAYER_SETUP: begin conv_acc<=0; kx<=0; ky<=0; in_ch<=0; state<=S_MAC; end
                 S_MAC: begin
-                    conv_acc<=conv_acc+{{16{mac_product[15]}},mac_product};
-                    if (in_ch==(in_channels-1)) begin
-                        in_ch<=0;
-                        if (kx==2) begin
-                            kx<=0;
-                            if (ky==2) begin ky<=0; state<=S_CONV_FINISH; end
-                            else ky<=ky+1'b1;
-                        end else kx<=kx+1'b1;
-                    end else in_ch<=in_ch+1'b1;
+                    conv_acc<=conv_acc+{{16{conv_mac_product[15]}},conv_mac_product};
+                    // PyTorch Conv2D weights are flattened OIHW: input-channel,
+                    // kernel-row, then kernel-column. Traverse kx -> ky -> in_ch
+                    // so the serial MAC reads weights and input channels in that order.
+                    if (kx==2) begin
+                        kx<=0;
+                        if (ky==2) begin
+                            ky<=0;
+                            if (in_ch==(in_channels-1)) begin
+                                in_ch<=0;
+                                state<=S_CONV_FINISH;
+                            end else begin
+                                in_ch<=in_ch+1'b1;
+                            end
+                        end else begin
+                            ky<=ky+1'b1;
+                        end
+                    end else begin
+                        kx<=kx+1'b1;
+                    end
                 end
                 S_CONV_FINISH: begin
                     if (sub_x&&sub_y) begin
