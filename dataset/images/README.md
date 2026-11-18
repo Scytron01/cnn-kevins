@@ -2,7 +2,7 @@
 
 ## Sumber metadata utama
 
-Dataset utama proyek tetap [Fashion Clothing Products Catalog](https://www.kaggle.com/datasets/shivamb/fashion-clothing-products-catalog/data) (`shivamb/fashion-clothing-products-catalog`). Sumber ini berisi katalog/metadata; jangan menganggapnya sebagai folder JPG lengkap.
+Dataset utama proyek tetap [Fashion Product Images (Small)](https://www.kaggle.com/datasets/paramaggarwal/fashion-product-images-small?resource=download)
 
 ## Galeri JPG yang bisa dibuka langsung
 
