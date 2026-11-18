@@ -39,10 +39,10 @@ flowchart TD
     V["Validasi tiap epoch<br/>early stopping dari macro-F1"]
     E["Evaluasi test set<br/>accuracy, macro-F1, report, confusion matrix"]
     W[("best_model.pt + metrics.json")]
-    X["Foto pakaian baru"]
-    Y["Preprocessing yang sama<br/>mask 64 x 64 + 4 fitur geometri"]
-    Z["Load checkpoint + CNN"]
-    O["Softmax + kelas terpilih<br/>confidence"]
+    X["Foto JPG/PNG baru<br/>USB / MicroSD"]
+    Y["HPS decode + preprocessing<br/>mask 64 x 64 + 4 fitur geometri"]
+    Z["HPS kirim data via Avalon-MM<br/>CNN inference di FPGA"]
+    O["Class ID 0..4<br/>Inventaris HPS + dashboard VGA"]
 
     K --> D --> M --> S --> R
     R --> I --> B --> C --> Q
@@ -178,8 +178,8 @@ flowchart TB
         DECODE["Decode JPG/PNG"]
         PRE["Preprocessing OpenCV<br/>Mask 64x64 + 4 fitur geometri"]
         APP["Aplikasi kontrol<br/>Pilih foto / klasifikasi / konfirmasi"]
-        INV["Inventaris lokal<br/>Daftar barang + jumlah per kategori"]
-        UI["Dashboard 640x480<br/>Foto aktif + hasil + daftar/jumlah"]
+        INV["Inventaris lokal<br/>Foto / nama barang / kategori / jumlah"]
+        UI["Dashboard 640x480<br/>Foto aktif + thumbnail barang + nama/jumlah"]
         MEDIA --> DECODE --> PRE
         PRE --> APP
         APP --> INV --> UI
@@ -301,7 +301,7 @@ Checkpoint dan metrik disimpan di \`report/runs/laundry_shape_cnn/\`.
 python -m algoritma.predict "path/to/clothing.jpg"
 ~~~
 
-Pipeline prediksi menggunakan segmentasi dan ekstraksi geometri yang sama dengan pipeline dataset, lalu memuat \`best_model.pt\` untuk menentukan lima kelas dan confidence.
+Pipeline prediksi Python di PC menggunakan segmentasi dan ekstraksi geometri yang sama dengan pipeline dataset, lalu memuat \`best_model.pt\` untuk menentukan lima kelas dan confidence. Untuk operasi standalone, foto dibaca dari USB/MicroSD oleh HPS dan inferensi dijalankan oleh CNN di FPGA seperti pada bagian 9.
 
 ### 4.5 Unit test
 
@@ -426,9 +426,9 @@ flowchart TD
         SELECT["Pilih foto aktif<br/>KEY0 / KEY1"]
         PRE["Decode + preprocessing<br/>Mask 64x64 + 4 fitur"]
         APP["Kontrol aplikasi"]
-        INV["Inventaris persisten<br/>Foto / nama file / kategori"]
+        INV["Inventaris persisten<br/>Path foto + nama file + kategori"]
         COUNT["Hitung barang per kategori"]
-        UI["Dashboard monitor<br/>Foto aktif + list + jumlah"]
+        UI["Dashboard monitor<br/>Foto aktif + thumbnail list + jenis + jumlah"]
         MOUNT --> SELECT --> PRE --> APP
         APP --> INV --> COUNT --> UI
         SELECT --> UI
