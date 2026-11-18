@@ -217,14 +217,25 @@ module cnn_top (
                 S_LAYER_SETUP: begin conv_acc<=0; kx<=0; ky<=0; in_ch<=0; state<=S_MAC; end
                 S_MAC: begin
                     conv_acc<=conv_acc+{{16{mac_product[15]}},mac_product};
-                    if (in_ch==(in_channels-1)) begin
-                        in_ch<=0;
-                        if (kx==2) begin
-                            kx<=0;
-                            if (ky==2) begin ky<=0; state<=S_CONV_FINISH; end
-                            else ky<=ky+1'b1;
-                        end else kx<=kx+1'b1;
-                    end else in_ch<=in_ch+1'b1;
+                    // PyTorch Conv2D weights are flattened OIHW: input-channel,
+                    // kernel-row, then kernel-column. Traverse kx -> ky -> in_ch
+                    // so the serial MAC reads weights and input channels in that order.
+                    if (kx==2) begin
+                        kx<=0;
+                        if (ky==2) begin
+                            ky<=0;
+                            if (in_ch==(in_channels-1)) begin
+                                in_ch<=0;
+                                state<=S_CONV_FINISH;
+                            end else begin
+                                in_ch<=in_ch+1'b1;
+                            end
+                        end else begin
+                            ky<=ky+1'b1;
+                        end
+                    end else begin
+                        kx<=kx+1'b1;
+                    end
                 end
                 S_CONV_FINISH: begin
                     if (sub_x&&sub_y) begin
