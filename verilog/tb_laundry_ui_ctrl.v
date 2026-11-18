@@ -16,7 +16,7 @@ module tb_laundry_ui_ctrl;
         @(negedge clk); avs_read=0; avs_write=1; avs_writedata=1;
         @(negedge clk); avs_write=0; avs_read=1; #1;
         if(avs_readdata[0]!==0) $fatal(1,"KEY0 event did not clear");
-        switches=10'b10; avs_address=2; #1;
+        switches=10'b10; avs_address=2; repeat(3) @(negedge clk); #1;
         if(avs_readdata[1:0]!==2'b10) $fatal(1,"SW[1:0] mismatch");
         $display("PASS: LAUNDRY_UI_CTRL"); $finish;
     end
