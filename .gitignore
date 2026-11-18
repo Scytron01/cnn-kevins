@@ -23,3 +23,8 @@ work/
 build/
 *.wlf
 transcript
+
+# Board-local configuration and runtime inventory
+hps/config/de10_standard.json
+**/inventory.json
+hps/logs/
