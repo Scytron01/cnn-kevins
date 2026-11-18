@@ -71,7 +71,7 @@ def calibrate(model: LaundryShapeCNN, data_path: Path, max_samples: int, batch_s
             maxima["geometry"] = max(maxima["geometry"],float(g.max().item()))
             maxima["fc1"] = max(maxima["fc1"],float(fc1.max().item()))
     scales = {
-        "input":1.0/Q7_MAX,
+        "input":1.0,
         "conv1":activation_scale(maxima["conv1"]),
         "conv2":activation_scale(maxima["conv2"]),
         "conv3":activation_scale(maxima["conv3"]),
@@ -101,7 +101,7 @@ def export(checkpoint: Path,data_path: Path,output_dir: Path,max_calibration_sam
     metadata = {
         "source_checkpoint":str(checkpoint),"calibration_dataset":str(data_path),
         "calibration_samples":sample_count,"class_names":class_names,
-        "activation_encoding":"signed int8, nonnegative codes 0..127 with per-layer calibrated scale",
+        "activation_encoding":"Conv1 input is binary 0/1 without multiplier; later activations are nonnegative INT8 codes 0..127 with per-layer calibrated scales",
         "weight_encoding":"symmetric signed int8, per-layer scale max_abs(weight)/127",
         "accumulator":"signed int32","requant_multiplier":"unsigned Q24",
         "activation_maxima":maxima,"activation_scales_real_per_code":scales,"layers":{}
@@ -130,7 +130,7 @@ def export(checkpoint: Path,data_path: Path,output_dir: Path,max_calibration_sam
         "Convolutions use SAME padding and 2x2 max-pooling.",
         "Feature maps are stored channel-last in cnn_top.",
         "FC2 outputs are raw signed accumulators; common output scale makes ArgMax valid.",
-        "geometry_q7 bytes are round(normalized_feature*127), clamped to 0..127."
+        "Conv1 input is stored as binary 0/1; geometry_q7 bytes are round(normalized_feature*127), clamped to 0..127."
     ]
     (output_dir/"quantization.json").write_text(json.dumps(metadata,indent=2,ensure_ascii=False),encoding="utf-8")
     print("[EXPORT] Wrote ROM files to",output_dir)
