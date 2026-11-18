@@ -1,6 +1,8 @@
 # Smart Laundry Sorter — Kaggle Fashion Clothing Catalog + Cyclone V
 
 **Kevin Kidney Sumual | 101022300012**
+
+
 Dataset sumber: [Fashion Clothing Products Catalog — Kaggle](https://www.kaggle.com/datasets/shivamb/fashion-clothing-products-catalog/data), handle `shivamb/fashion-clothing-products-catalog`.
 
 ## Dataset terlihat di folder dataset
