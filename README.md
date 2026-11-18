@@ -360,3 +360,49 @@ Project top-level Quartus (\`.qpf/.qsf\`), pin assignment, dan clock constraint 
 - [Laporan status hardware](report/HARDWARE_STATUS.md)
 - [Kompatibilitas toolchain](report/TOOLCHAIN_COMPATIBILITY.md)
 - [Dataset dan label](report/DATASET_AND_LABELS.md)
+
+
+---
+
+## 9. CNN inference di Verilog (reference accelerator)
+
+CNN Python dapat diekspor menjadi bobot INT8 dan dijalankan oleh top-level Verilog cnn_top. Implementasi RTL serial ini memproses model dengan satu MAC signed 8×8 yang dipakai bergantian oleh Conv1–Conv3 dan FC. Aktivasi disimpan sebagai signed INT8 nonnegatif (0..127); accumulator menggunakan signed INT32; requantization memakai multiplier unsigned Q24 hasil kalibrasi.
+
+~~~mermaid
+flowchart TD
+    A["64x64 mask stream<br/>1 bit/pixel"] --> B["Input buffer<br/>4096 samples"]
+    B --> C["Conv1 1→8 + ReLU + MaxPool"]
+    C --> D["Conv2 8→16 + ReLU + MaxPool"]
+    D --> E["Conv3 16→32 + ReLU + MaxPool"]
+    E --> F["Global Average Pooling<br/>32 features"]
+    G["4 geometry features<br/>Q7 bytes"] --> H["Scale to FC input range"]
+    F --> H
+    H --> I["FC1 36→64 + ReLU"]
+    I --> J["FC2 64→5"]
+    J --> K["ArgMax"]
+    K --> L["result_class 0..4<br/>result_valid pulse"]
+~~~
+
+### Export bobot dari checkpoint PyTorch
+
+Setelah menjalankan training Python, jalankan dari root repository:
+
+~~~bash
+python -m algoritma.export_verilog_weights
+~~~
+
+Exporter membaca checkpoint best_model.pt, memakai laundry64.npz untuk kalibrasi aktivasi, lalu membuat ROM .mem dan quantization.json di verilog/weights.
+
+### Kontrak port cnn_top
+
+- Pulse start ketika busy=0; geometry_q7 dilatch pada saat itu.
+- Kirim tepat 4096 pixel 1-bit secara row-major ketika in_ready=1.
+- Empat byte geometry_q7: area, aspect ratio, bounding-box occupancy, lower-two-run score; tiap byte adalah round(feature_normalized*127) dan dibatasi 0..127.
+- result_valid memberi tanda bahwa result_class sudah tersedia.
+- Geometry IP yang ada belum langsung terhubung ke geometry_q7; fitur harus dinormalisasi upstream, dan mask perlu disimpan lalu di-replay ke CNN setelah statistik geometry tersedia.
+
+### Status ROM dan verifikasi
+
+ROM .mem yang disertakan saat ini adalah placeholder nol, bukan bobot training. Export bobot aktual setelah checkpoint model tersedia. Testbench verilog/tb_cnn_top.v memeriksa alur satu frame hingga prediksi keluar, bukan akurasi model. Simulasi perlu dijalankan melalui verilog/run_cnn.do atau GitHub Actions.
+
+RTL ini masih reference serial accelerator. Optimasi RAM sinkron, bit-exact golden model, Quartus synthesis, timing, dan uji pada board Cyclone V belum dilakukan.

@@ -1,4 +1,4 @@
-name: Python pipeline tests
+name: Python and RTL smoke tests
 
 on:
   push:
@@ -15,7 +15,20 @@ jobs:
         with:
           python-version: "3.11"
           cache: "pip"
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: python -m pip install -r requirements.txt
       - name: Run unit tests
         run: python -m unittest discover -s algoritma -p "test_*.py" -v
+
+  test-verilog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Icarus Verilog
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iverilog
+      - name: Compile and run CNN smoke test
+        run: |
+          iverilog -g2001 -s tb_cnn_top -o /tmp/cnn_sim verilog/cnn_mac_unit.v verilog/cnn_top.v verilog/tb_cnn_top.v
+          vvp /tmp/cnn_sim
