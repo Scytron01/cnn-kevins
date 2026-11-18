@@ -1,0 +1,37 @@
+name: DE10 standalone smoke tests
+on:
+  push:
+    paths:
+      - "verilog/**"
+      - "hps/**"
+      - "algoritma/**"
+      - ".github/workflows/de10_standalone.yml"
+  pull_request:
+    paths:
+      - "verilog/**"
+      - "hps/**"
+      - "algoritma/**"
+      - ".github/workflows/de10_standalone.yml"
+jobs:
+  rtl-and-hps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Icarus Verilog and Python dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iverilog python3-numpy python3-opencv python3-pil
+      - name: Compile RTL
+        run: |
+          iverilog -g2012 -s tb_laundry_ui_ctrl -o /tmp/tb_ui verilog/laundry_ui_ctrl.v verilog/tb_laundry_ui_ctrl.v
+          iverilog -g2012 -s tb_vga_timing_640x480 -o /tmp/tb_vga verilog/vga_timing_640x480.v verilog/tb_vga_timing_640x480.v
+          iverilog -g2012 -s tb_cnn_avalon_slave -o /tmp/tb_cnn verilog/cnn_mac_unit.v verilog/cnn_top.v verilog/cnn_avalon_slave.v verilog/tb_cnn_avalon_slave.v
+      - name: Run testbenches
+        run: |
+          vvp /tmp/tb_ui
+          vvp /tmp/tb_vga
+          vvp /tmp/tb_cnn
+      - name: Check HPS application and helper tests
+        run: |
+          python3 -m py_compile hps/app/laundry_app.py
+          python3 -m unittest hps.tests.test_hps_helpers -v
