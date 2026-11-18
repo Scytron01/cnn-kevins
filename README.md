@@ -1,214 +1,119 @@
-#  Smart Laundry Sorter: Implementasi Hybrid CNN untuk Penyortiran Pakaian Berbasis Morfologi Piksel
+# Smart Laundry Sorter — Kaggle Fashion Shape-CNN
 
 **Kevin Kidney Sumual | 101022300012**
 
-Sistem otomatisasi penyortiran pakaian kotor berbasis **Computer Vision** dan **Deep Learning (Convolutional Neural Network)** yang mengklasifikasikan item laundry berdasarkan **bentuk geometri, siluet kontur, dan skala piksel** secara *real-time*.
+Proyek klasifikasi pakaian laundry berdasarkan siluet dari dataset Kaggle **Fashion Product Images Small** (`paramaggarwal/fashion-product-images-small`). Foto katalog diproses menjadi mask biner 64×64 dan empat fitur geometri, kemudian digunakan untuk melatih CNN PyTorch lima kelas.
 
----
+> **Status jujur implementasi:** pipeline Kaggle, preprocessing, training/evaluasi CNN Python, prediksi satu foto, RTL geometry extractor, testbench, dan contoh firmware Nios V untuk membaca metadata geometri disertakan. RTL saat ini **belum merupakan CNN accelerator penuh**. Conv1–Conv3 RTL, kuantisasi fixed-point/INT8, FC/ArgMax di Nios V, dan verifikasi bit-exact adalah pekerjaan lanjutan.
 
-## Daftar Isi
-- [Latar Belakang Proyek](#-latar-belakang-proyek)
-- [Kelas Klasifikasi Pakaian](#-kelas-klasifikasi-pakaian)
-- [Alur Kerja Sistem (End-to-End Pipeline)](#-alur-kerja-sistem-end-to-end-pipeline)
-- [Arsitektur Sistem & Hybrid CNN](#-arsitektur-sistem--hybrid-cnn)
-- [Struktur Repositori](#-struktur-repositori)
-- [Instalasi & Persiapan Lingkungan](#-instalasi--persiapan-lingkungan)
-- [Panduan Penggunaan](#-panduan-penggunaan)
-- [Strategi Dataset & Augmentasi](#-strategi-dataset--augmentasi)
-- [Roadmap Pengembangan](#-roadmap-pengembangan)
-- [Lisensi](#-lisensi)
+## Kelas
 
----
+| ID | Kelas | Kaggle `articleType` |
+|---:|---|---|
+| 0 | Baju | Shirts, Tshirts, Tops, Kurtas |
+| 1 | Celana | Jeans, Trousers, Track Pants, Shorts, Capris |
+| 2 | Jaket | Jackets, Sweaters, Sweatshirts, Blazers |
+| 3 | Celana Dalam | Briefs, Boxers, Trunk |
+| 4 | Kaus Dalam | Innerwear Vests, Camisoles |
 
-## Latar Belakang Proyek
+Mapping ada di `algoritma/class_map.json`. Kategori yang tersedia bergantung pada salinan dataset. Skrip melaporkan distribusi dan menghentikan proses bila suatu kelas tidak memenuhi minimum; jangan membuat label palsu atau menduplikasi sampel untuk menutup kelas kosong.
 
-Penyortiran pakaian secara manual di fasilitas laundry komersial maupun industri sering kali memakan waktu lama dan rentan terhadap kesalahan penanganan (seperti pakaian dalam yang terselip, kaus dalam melar akibat tercampur beban berat, atau jaket tebal yang memerlukan siklus pencucian khusus).
+## Struktur repository
 
-Proyek ini menyelesaikan masalah pengenalan objek kain yang bersifat *non-rigid* (mudah terlipat dan berubah bentuk) dengan menggabungkan:
-1. **Segmentasi Siluet Biner** untuk mengisolasi bentuk luar pakaian dari latar belakang konveyor.
-2. **Letterbox Resizing** untuk mempertahankan rasio aspek asli tanpa distorsi.
-3. **Multi-Input Hybrid CNN** yang menggabungkan fitur visual 4-kanal ($\text{RGB} + \text{Mask}$) dengan vektor metadata geometri skala fisik.
-
----
-
-## Kelas Klasifikasi Pakaian
-
-Model dirancang untuk memisahkan pakaian ke dalam **5 kategori utama** berdasarkan karakteristik morfologi piksel dan penanganan pencucian:
-
-| ID Kelas | Kategori Pakaian | Ciri Geometri & Siluet Piksel | Fitur Struktural Internal | Tindakan Aktuasi / Jalur |
-| :---: | :--- | :--- | :--- | :--- |
-| **`0`** | **Baju / Atasan** (*Kaus, Kemeja*) | Kontur badan utama dengan tonjolan simetris dua lengan; rasio aspek mendekati $1:1$ hingga $1:1.3$. | Garis kerah (*collar*), lipatan bahu, kancing vertikal, potongan bawah rata. | Keranjang Cuci Reguler |
-| **`1`** | **Celana** (*Panjang / Pendek*) | Kontur memanjang (*elongated*) dengan percabangan dua pipa kaki; rasio aspek $1:1.5$ hingga $1:2.5$. | Garis pinggang (*waistband*) tebal, jahitan tengah (*inseam*), saku. | Keranjang Pakaian Bawah |
-| **`2`** | **Jaket / Outer** (*Hoodie, Sweater*) | Luas area piksel paling besar dan tebal; siluet lebar dengan lengan penuh dan kerah tinggi/tudung. | Resleting (*zipper*) vertikal, manset karet tebal (*ribbed cuffs*), tali *hoodie*. | Keranjang *Heavy-Duty* |
-| **`3`** | **Celana Dalam** (*Briefs, Boxers*) | **Luas area piksel sangat kecil**; bentuk segitiga/trapesium terbalik atau persegi pendek tanpa pipa kaki. | Pita karet pinggang elastis kontras dan lengkungan paha (*leg openings*). | *Mesh Laundry Bag* Khusus |
-| **`4`** | **Kaus Dalam** (*Singlet / Tank Top*) | Kontur badan vertikal ramping **tanpa tonjolan lengan** (*sleeveless*). | Potongan leher U/V dalam (*deep scoop neck*) dan dua tali bahu sempit. | Keranjang *Delicates / Gentle* |
-
----
-
-## Alur Kerja Sistem (End-to-End Pipeline)
-
-1. **Flat-Drop Feeding & IR Trigger**
-   Pakaian diletakkan semi-terbentang di atas sabuk konveyor berwarna *matte* netral (kecepatan ideal $0.2 - 0.4\text{ m/s}$). Saat melewati sensor inframerah (*break-beam*), kamera *overhead* di dalam *lightbox* LED ($\text{CRI} > 90$, $5500\text{K}$) mengambil citra secara otomatis.
-2. **Segmentasi & Ekstraksi Siluet**
-   Algoritma *Background Subtraction* memisahkan objek kain dari permukaan sabuk konveyor untuk menghasilkan citra masker biner hitam-putih.
-3. **Ekstraksi Fitur Geometri Skala Fisik**
-   Sebelum gambar diubah ukurannya, sistem menghitung parameter fisik aktual dari kontur utama:
-   - **Luas Area Piksel ($A$):** Membedakan objek kecil (celana dalam) dengan objek besar (jaket).
-   - **Aspect Ratio ($W/H$):** Rasio lebar terhadap tinggi *bounding box* objek.
-   - **Solidity ($S = A / A_{\text{convex}}$):** Mengukur tingkat lekukan atau percabangan pipa kaki celana.
-4. **Letterbox Resizing**
-   Citra *Region of Interest* (ROI) diubah ukurannya menjadi $256 \times 256$ piksel dengan penambahan *padding* hitam pada sisi terpendek agar bentuk asli celana maupun baju tidak terdistorsi.
-5. **Inferensi Hybrid CNN & Aktuasi Diverter**
-   Model mengeluarkan probabilitas untuk 5 kelas. Jika skor *confidence* $\ge 0.80$, unit komputasi mengirimkan sinyal via UART/GPIO ke mikrokontroler ESP32 untuk menggerakkan lengan pemilah (*diverter*) menuju keranjang yang sesuai.
-
----
-
-## Arsitektur Sistem & Hybrid CNN
-
-Sistem menggunakan pendekatan **Late Fusion** yang memadukan cabang ekstraksi spasial 4-kanal dengan cabang *Multi-Layer Perceptron* (MLP) untuk skala geometri:
+Nama folder lama dipertahankan: `Reference/`, `algoritma/`, `dataset/`, `report/`, dan `verilog/`. Placeholder lama tidak dihapus. Folder `software_niosv/` ditambahkan untuk firmware.
 
 ```text
-                       [Kamera Overhead + Lightbox]
-                                    │
-                                    ▼
-                     (Frame Citra Asli di Konveyor)
-                                    │
-                 ┌──────────────────┴──────────────────┐
-                 ▼                                     ▼
-   [Segmentasi & Letterbox Resize]        [Ekstraksi Fitur Geometri]
-    - RGB (3 Kanal) + Masker Biner         - Luas Area Piksel (A)
-    - Padding tanpa distorsi               - Aspect Ratio (W/H)
-    - Dimensi: 256 x 256 x 4               - Solidity & Perimeter
-                 │                                     │
-                 ▼                                     ▼
-   ┌───────────────────────────┐         ┌───────────────────────────┐
-   │    CNN SHAPE BACKBONE     │         │   GEOMETRIC MLP BRANCH    │
-   │  - Conv2D + Dilated Conv  │         │  - Dense (16, ReLU)       │
-   │  - Spatial Pyramid Pool   │         │  - BatchNormalization     │
-   └─────────────┬─────────────┘         └─────────────┬─────────────┘
-                 │ (Vektor Fitur Spasial: 256)         │ (Vektor Skala: 16)
-                 └──────────────────┬──────────────────┘
-                                    ▼
-                        [Concatenate Layer (272)]
-                                    │
-                                    ▼
-                      [Dense (128) + Dropout (0.3)]
-                                    │
-                                    ▼
-                         [Softmax Output (5 Kelas)]
-         ┌──────────┬──────────┬──────────┬──────────┬──────────┐
-         ▼          ▼          ▼          ▼          ▼          ▼
-      (Baju)    (Celana)    (Jaket)   (Cel.Dalam) (Kaus Dalam) (Manual)
-```
-
-### Komponen Kunci Arsitektur Model:
-- **Input Layer 4-Kanal ($256 \times 256 \times 4$):** Menggabungkan citra warna $\text{RGB}$ (untuk detail kerah, resleting, karet pinggang) dengan masker biner (untuk batas tepi luar yang tegas).
-- **Dilated Convolutions ($\text{dilation\_rate} = 2$):** Memperluas *receptive field* tanpa menurunkan resolusi spasial secara drastis, membantu jaringan mengenali hubungan dua pipa kaki celana yang terpisah.
-- **Spatial Pyramid Pooling (SPP):** Memecah peta fitur akhir ke dalam grid $1 \times 1$, $2 \times 2$, dan $4 \times 4$ secara paralel agar model invarian terhadap variasi ukuran pakaian anak maupun dewasa.
-- **Geometric Fusion:** Memastikan objek kecil berbentuk segitiga dengan luas area piksel rendah diklasifikasikan secara akurat sebagai **Celana Dalam** dan tidak tertukar dengan baju terlipat.
-
----
-
-## Struktur Repositori
-
-```text
-smart-laundry-sorter-cnn/
-├── configs/
-│   └── config.yaml                 # Konfigurasi hyperparameter, threshold, dan port serial
-├── dataset/
-│   ├── raw/                        # Citra mentah hasil tangkapan kamera konveyor
-│   └── processed/                  # Dataset hasil segmentasi masker & metadata CSV
-├── firmware/
-│   └── esp32_diverter_control/
-│       └── esp32_diverter_control.ino  # Kode kontrol sensor IR, motor conveyor, & aktuator
-├── models/
-│   ├── checkpoints/                # Bobot model terbaik (.h5 / .pt)
-│   └── exported/                   # Model terkuantisasi (.onnx / .tflite) untuk Edge AI
-├── notebooks/
-│   ├── 01_eda_geometry_analysis.ipynb  # Analisis distribusi luas area & aspect ratio
-│   └── 02_gradcam_visualization.ipynb  # Validasi area fokus model CNN
-├── src/
-│   ├── preprocessing/
-│   │   ├── segmentation.py         # Background subtraction & ekstraksi masker biner
-│   │   └── geometry_extractor.py   # Perhitungan luas piksel, aspect ratio, & solidity
-│   ├── model/
-│   │   ├── hybrid_cnn.py           # Definisi arsitektur 4-Channel CNN + Geometric MLP
-│   │   └── spp_layer.py            # Implementasi Spatial Pyramid Pooling
-│   ├── train.py                    # Skrip pelatihan dan evaluasi model
-│   └── inference_realtime.py       # Pipeline inferensi kamera + komunikasi serial ESP32
+cnn-kevins/
+├── Reference/                    # folder lama, dipertahankan
+├── algoritma/
+│   ├── class_map.json            # articleType -> 5 kelas
+│   ├── preprocessing.py          # segmentasi, letterbox, geometri
+│   ├── prepare_dataset.py        # Kaggle -> NPZ
+│   ├── model.py                  # CNN tiga convolutional blocks
+│   ├── train.py                  # training, validation, test
+│   ├── predict.py                # inferensi satu foto
+│   └── test_pipeline.py          # unit test
+├── dataset/                      # dataset lokal (tidak di-commit)
+├── report/                       # dokumentasi dan output eksperimen
+├── verilog/
+│   ├── laundry_geom_ip.v         # Avalon-ST geometry extractor
+│   ├── laundry_geom_hw.tcl       # descriptor Platform Designer
+│   └── tb_laundry_geom.v         # testbench siluet celana
+├── software_niosv/src/main.c     # telemetry geometri Nios V
 ├── requirements.txt
-└── README.md
+└── .gitignore
 ```
 
----
+## Arsitektur Python
 
-## Instalasi & Persiapan Lingkungan
+Input mask `1×64×64` → Conv1 `1→8` → Conv2 `8→16` → Conv3 `16→32`, masing-masing Conv2D + ReLU + MaxPool 2×2 → Global Average Pooling (32 fitur) → gabung empat fitur geometri → classifier `36→64→5`.
 
-1. **Kloning Repositori**
-   ```bash
-   git clone https://github.com/username/smart-laundry-sorter-cnn.git
-   cd smart-laundry-sorter-cnn
-   ```
+Empat fitur: normalized area, normalized aspect ratio, bounding-box occupancy, dan proporsi baris bagian bawah bounding box yang memiliki tepat dua segmen foreground. Fitur ketiga adalah **bounding-box occupancy, bukan convex-hull solidity**; definisi tersebut dipilih agar dapat dihitung ulang dari area dan bounding box hardware.
 
-2. **Buat Virtual Environment & Instal Dependensi**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # Untuk Windows: venv\Scripts\activate
-   pip install --upgrade pip
-   pip install -r requirements.txt
-   ```
+## Instalasi dan dataset Kaggle
 
-3. **Unggah Firmware ke ESP32**
-   Buka berkas `firmware/esp32_diverter_control/esp32_diverter_control.ino` menggunakan Arduino IDE atau PlatformIO, sesuaikan pin GPIO untuk sensor IR dan aktuator servo/pneumatik, lalu unggah ke board ESP32.
+Gunakan Python 3.10+.
 
----
-
-## Panduan Penggunaan
-
-### 1. Pra-pemrosesan Dataset & Ekstraksi Fitur Geometri
-Menghasilkan citra 4-kanal ($\text{RGB} + \text{Mask}$) dan file CSV berisi metadata geometri dari gambar mentah:
 ```bash
-python src/preprocessing/segmentation.py --input_dir dataset/raw --output_dir dataset/processed
+python -m venv .venv
+# Windows PowerShell
+.venv\Scripts\Activate.ps1
+# Linux/macOS: source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
 ```
 
-### 2. Pelatihan Model Hybrid CNN
-Melatih model menggunakan konfigurasi yang ditentukan di `configs/config.yaml`:
+Siapkan autentikasi Kaggle/KaggleHub pada komputer Anda, lalu jalankan:
+
 ```bash
-python src/train.py --config configs/config.yaml --epochs 50 --batch_size 32
+python -m algoritma.prepare_dataset
 ```
 
-### 3. Menjalankan Penyortiran Real-Time
-Menjalankan kamera inspeksi, model inferensi, dan pengiriman sinyal aktuasi ke mikrokontroler:
+Alternatif unduh manual: arahkan ke folder berisi `styles.csv` dan `images/`.
+
 ```bash
-python src/inference_realtime.py --model models/exported/laundry_hybrid_cnn.onnx --serial_port /dev/ttyUSB0
+python -m algoritma.prepare_dataset --no-download --dataset-dir "D:/dataset/fashion-product-images-small"
 ```
 
----
+Parameter lengkap: `python -m algoritma.prepare_dataset --help`. Default minimum resolusi sumber 32×32, mask 64×64, maksimum 2500 sampel/kelas, minimum 20 sampel/kelas. Output lokal: `dataset/processed/laundry64.npz`, `laundry64.report.json`, `laundry64.distribution.csv`, dan `mask_preview.png`.
 
-## Strategi Dataset & Augmentasi
+**Periksa `mask_preview.png` sebelum training.** Dataset katalog bukan citra pakaian di conveyor; model/mannequin, latar putih, bayangan, dan objek yang menyentuh tepi gambar dapat mengganggu segmentasi. Kumpulkan pula foto conveyor/lightbox untuk validasi domain akhir. Dataset mentah, NPZ, checkpoint, dan hasil eksperimen tidak disimpan dalam Git.
 
-Untuk mencapai generalisasi tinggi pada kondisi lipatan kain nyata, dataset disusun dengan komposisi berikut:
-- **Jumlah Sampel:** Minimal $1.000$ citra per kelas (total $\ge 5.000$ citra) dengan pembagian $70\%$ *Training*, $15\%$ *Validation*, dan $15\%$ *Testing*.
-- **Variasi Kondisi Pakaian:** $50\%$ terbentang alami (*flat-lay*), $35\%$ terlipat sebagian (*semi-folded*), dan $15\%$ kusut ringan (*naturally crumpled*).
-- **Augmentasi Aman Morfologi:**
-  - ✅ *Random Rotation* ($0^\circ - 360^\circ$) dan *Horizontal/Vertical Flip*
-  - ✅ *Scale Jitter* ($\pm 15\%$) dengan pembaruan nilai luas piksel proporsional
-  - ✅ *Elastic Grid Distortion* halus untuk mensimulasikan kerutan alami kain
-  - ❌ **Hindari *Random Cropping*** agar ujung lengan baju atau pipa celana panjang tidak terpotong (yang dapat mengubah label bentuk objek secara keliru).
+## Training dan prediksi
 
----
+```bash
+python -m algoritma.train --epochs 40 --batch-size 32
+python -m algoritma.predict "path/to/clothing.jpg"
+```
 
-## Roadmap Pengembangan
+Training memakai split stratified 70%/15%/15% (train/validation/test), early stopping berdasarkan validation macro-F1, lalu melaporkan test accuracy, macro-F1, classification report, dan confusion matrix. Output ada di `report/runs/laundry_shape_cnn/`.
 
-- [x] Perancangan arsitektur Hybrid 4-Channel CNN + Geometric MLP
-- [x] Implementasi modul ekstraksi kontur, *letterbox padding*, dan *solidity*
-- [ ] Pengumpulan dataset terstandarisasi di atas *conveyor belt* ($5.000+$ citra)
-- [ ] Kuantisasi model ke format INT8/FP16 untuk latensi inferensi $< 35\text{ ms}$ di Raspberry Pi 5
-- [ ] Integrasi mekanisme sinkronisasi *rotary encoder* pada konveyor kecepatan variabel
-- [ ] Pengembangan *dashboard* monitoring berbasis web untuk statistik *throughput* cucian
+## Unit test Python
 
----
+```bash
+python -m unittest discover -s algoritma -p "test_*.py" -v
+```
 
-## 📄 Lisensi
+Fixture pengujian membuat katalog dummy berformat `styles.csv` + `images/`; fixture tersebut hanya menguji jalur kode, bukan hasil eksperimen dataset Kaggle dan bukan dasar klaim akurasi.
 
-Proyek ini didistribusikan di bawah lisensi **MIT License**. Lihat berkas `LICENSE` untuk informasi lebih lanjut.
+## RTL geometry extractor
+
+`verilog/laundry_geom_ip.v` menerima satu bit masker per beat Avalon-ST. Saat EOP, blok menyelesaikan hitungan baris bagian bawah dengan dua run. Simulasi Icarus:
+
+```bash
+iverilog -g2012 -s tb_laundry_geom -o verilog/tb_laundry_geom.out verilog/laundry_geom_ip.v verilog/tb_laundry_geom.v
+vvp verilog/tb_laundry_geom.out
+```
+
+Peta CSR (word address): 0 status (bit 2 frame done, bit 1 finalizing), 1 area, 2 bounding box `[xmin,xmax,ymin,ymax]`, 3 jumlah baris lower-two-run, 4 lebar/tinggi. Firmware `software_niosv/src/main.c` hanya membaca metadata geometri; belum menjalankan klasifikasi CNN. Hubungkan custom IP di Platform Designer dan pastikan base address muncul sebagai `LAUNDRY_GEOM_IP_0_BASE` di `system.h`.
+
+## Pekerjaan FPGA berikutnya
+
+1. Tetapkan kontrak fixed-point dan Python golden model (skala, lebar accumulator, rounding, saturation, padding, pooling).
+2. Implementasikan Conv1–Conv3, ReLU, pooling, dan GAP di RTL.
+3. Ekspor bobot/bias ROM dengan skala kuantisasi konsisten.
+4. Tambahkan register fitur, FC/ArgMax, serta klasifikasi lima kelas di Nios V.
+5. Buat testbench bit-exact Python vs. Verilog.
+6. Ukur ALM/M10K/DSP, timing, dan latensi pada board Cyclone V yang dituju.
+
+Poin tersebut adalah roadmap, bukan hasil yang sudah dicapai. Jangan mengklaim akurasi Kaggle, speedup, pemakaian resource, atau timing FPGA sebelum pengukuran aktual dilakukan.

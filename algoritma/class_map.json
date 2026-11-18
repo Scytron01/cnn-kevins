@@ -1,0 +1,30 @@
+{
+  "dataset": "paramaggarwal/fashion-product-images-small",
+  "class_names": [
+    "Baju",
+    "Celana",
+    "Jaket",
+    "Celana Dalam",
+    "Kaus Dalam"
+  ],
+  "article_type_to_class": {
+    "Shirts": 0,
+    "Tshirts": 0,
+    "Tops": 0,
+    "Kurtas": 0,
+    "Jeans": 1,
+    "Trousers": 1,
+    "Track Pants": 1,
+    "Shorts": 1,
+    "Capris": 1,
+    "Jackets": 2,
+    "Sweaters": 2,
+    "Sweatshirts": 2,
+    "Blazers": 2,
+    "Briefs": 3,
+    "Boxers": 3,
+    "Trunk": 3,
+    "Innerwear Vests": 4,
+    "Camisoles": 4
+  }
+}
