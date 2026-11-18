@@ -405,15 +405,15 @@ Target operasi yang dipilih adalah satu foto untuk satu pakaian, dengan dua sumb
 
 ~~~mermaid
 flowchart TD
-    USB["USB Flash Drive<br/>JPG / PNG"] --> HPS
-    SD["MicroSD<br/>OS + foto + inventory.json"] --> HPS
-    subgraph HPS["HPS ARM Cortex-A9 + Linux"]
-      HPS["Media Browser<br/>USB + MicroSD"]
+    USB["USB Flash Drive<br/>JPG / PNG"] --> MEDIA
+    SD["MicroSD<br/>OS + foto + inventory.json"] --> MEDIA
+    subgraph HPS_SYS["HPS ARM Cortex-A9 + Linux"]
+      MEDIA["Media Browser<br/>USB + MicroSD"]
       DEC["JPEG/PNG Decode"]
       PRE["OpenCV Preprocessing<br/>silhouette 64x64 + 4 geometry features"]
       APP["Inventory Manager<br/>SHA-256 dedup + JSON"]
       UI["Pillow UI Renderer<br/>RGB565 640x480"]
-      HPS --> DEC --> PRE
+      MEDIA --> DEC --> PRE
       APP --> UI
     end
     subgraph FPGA["Cyclone V FPGA Fabric"]
@@ -428,7 +428,7 @@ flowchart TD
     CNN -->|"class_id + cycle count"| APP
     UI -->|"shared FPGA SDRAM framebuffer"| DMA
     DMA --> VGA["VGA Monitor"]
-    KEY -->|"button events / source filter"| HPS
+    KEY -->|"button events / source filter"| MEDIA
 ~~~
 
 **HPS** membaca foto dari media removable, melakukan decoding JPEG/PNG, memanggil preprocessing yang sama dengan pipeline training, mengirim 4096 bit mask dan empat fitur geometri ke FPGA, menyimpan barang yang dikonfirmasi ke inventaris, dan membuat dashboard RGB565.
