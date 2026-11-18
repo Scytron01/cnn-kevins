@@ -2,11 +2,15 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
-dataset/raw/
-dataset/processed/*.npz
-dataset/processed/*.csv
-dataset/processed/*.json
-dataset/processed/*.png
+.env
+.kaggle/
+# Keep the dataset folder/documentation in Git, but not large downloaded payloads.
+dataset/raw/*
+!dataset/raw/README.md
+!dataset/raw/.gitkeep
+dataset/processed/*
+!dataset/processed/README.md
+!dataset/processed/.gitkeep
 report/runs/
 *.pt
 *.pth
@@ -15,5 +19,8 @@ report/runs/
 *.qpf
 *.qsf
 *.qsys
+*.sopcinfo
 work/
 build/
+*.wlf
+transcript

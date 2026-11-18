@@ -1,5 +1,7 @@
-# Catatan validasi
+# Validasi implementasi
 
-Unit test Python dijalankan pada workspace pengembangan: 3 test lulus, meliputi preprocessing/geometri, bentuk output CNN, dan ingest fixture bergaya Kaggle (`styles.csv` + `images/`, 50 gambar sintetis). Fixture ini bukan dataset Fashion Kaggle asli dan bukan hasil eksperimen akurasi.
-
-Unduhan Kaggle asli serta training pada dataset asli belum dilakukan di workspace ini karena memerlukan akses Kaggle pengguna. Simulasi Verilog/Quartus belum dijalankan di workspace ini. Jalankan testbench dengan Icarus/Questa dan sintesis pada versi Quartus serta board Cyclone V sasaran sebelum menyatakan RTL tervalidasi.
+- Preprocessing + materialisasi subset diuji dengan fixture lokal yang meniru struktur katalog (CSV dengan `id`, `articleType`, dan folder `images/`): PASS.
+- Fixture smoke test menghasilkan 3 citra per kelas untuk lima kelas, disalin ke raw folder, lalu berhasil diubah menjadi NPZ dengan shape `(15, 1, 64, 64)`: PASS.
+- Dataset Kaggle asli belum diunduh di sesi ini; jumlah dan keberadaan semua `articleType` harus diperiksa saat pengguna menjalankan downloader dengan akun Kaggle.
+- Model training real pada data Kaggle asli belum dilakukan; tidak ada metrik akurasi yang diklaim.
+- ModelSim-Altera, Quartus Prime Lite, dan RiscFree IDE tidak tersedia pada authoring environment ini. File .do/component/firmware disiapkan, tetapi simulasi, synthesis, timing analysis, dan board test belum dijalankan.
