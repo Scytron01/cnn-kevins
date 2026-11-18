@@ -1,4 +1,4 @@
-# Smart Laundry Sorter — Kaggle Fashion Clothing Catalog + Cyclone V
+# Implementasi CNN untuk Smart Laundry Sorter: Kaggle Fashion Clothing Catalog + Cyclone V
 
 **Kevin Kidney Sumual | 101022300012**
 
