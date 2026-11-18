@@ -1,11 +1,5 @@
 #  Smart Laundry Sorter: Implementasi Hybrid CNN untuk Penyortiran Pakaian Berbasis Morfologi Piksel
 
-[![Python](https://img.shields.io/badge/Python-3.9%2B-blue.svg)](https://www.python.org/)
-[![TensorFlow](https://img.shields.io/badge/TensorFlow-2.15%2B-orange.svg)](https://www.tensorflow.org/)
-[![OpenCV](https://img.shields.io/badge/OpenCV-4.8%2B-green.svg)](https://opencv.org/)
-[![Microcontroller](https://img.shields.io/badge/Hardware-FPGA-teal.svg)](#)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
 **Kevin Kidney Sumual | 101022300012**
 
 Sistem otomatisasi penyortiran pakaian kotor berbasis **Computer Vision** dan **Deep Learning (Convolutional Neural Network)** yang mengklasifikasikan item laundry berdasarkan **bentuk geometri, siluet kontur, dan skala piksel** secara *real-time*.
