@@ -24,7 +24,7 @@ Sistem otomatisasi penyortiran pakaian kotor berbasis **Computer Vision** dan **
 
 ---
 
-## 🎯 Latar Belakang Proyek
+## Latar Belakang Proyek
 
 Penyortiran pakaian secara manual di fasilitas laundry komersial maupun industri sering kali memakan waktu lama dan rentan terhadap kesalahan penanganan (seperti pakaian dalam yang terselip, kaus dalam melar akibat tercampur beban berat, atau jaket tebal yang memerlukan siklus pencucian khusus).
 
@@ -35,7 +35,7 @@ Proyek ini menyelesaikan masalah pengenalan objek kain yang bersifat *non-rigid*
 
 ---
 
-## 👕 Kelas Klasifikasi Pakaian
+## Kelas Klasifikasi Pakaian
 
 Model dirancang untuk memisahkan pakaian ke dalam **5 kategori utama** berdasarkan karakteristik morfologi piksel dan penanganan pencucian:
 
@@ -49,7 +49,7 @@ Model dirancang untuk memisahkan pakaian ke dalam **5 kategori utama** berdasark
 
 ---
 
-## ⚙️ Alur Kerja Sistem (End-to-End Pipeline)
+## Alur Kerja Sistem (End-to-End Pipeline)
 
 1. **Flat-Drop Feeding & IR Trigger**
    Pakaian diletakkan semi-terbentang di atas sabuk konveyor berwarna *matte* netral (kecepatan ideal $0.2 - 0.4\text{ m/s}$). Saat melewati sensor inframerah (*break-beam*), kamera *overhead* di dalam *lightbox* LED ($\text{CRI} > 90$, $5500\text{K}$) mengambil citra secara otomatis.
@@ -67,7 +67,7 @@ Model dirancang untuk memisahkan pakaian ke dalam **5 kategori utama** berdasark
 
 ---
 
-## 🧠 Arsitektur Sistem & Hybrid CNN
+## Arsitektur Sistem & Hybrid CNN
 
 Sistem menggunakan pendekatan **Late Fusion** yang memadukan cabang ekstraksi spasial 4-kanal dengan cabang *Multi-Layer Perceptron* (MLP) untuk skala geometri:
 
@@ -113,7 +113,7 @@ Sistem menggunakan pendekatan **Late Fusion** yang memadukan cabang ekstraksi sp
 
 ---
 
-## 📁 Struktur Repositori
+## Struktur Repositori
 
 ```text
 smart-laundry-sorter-cnn/
@@ -146,7 +146,7 @@ smart-laundry-sorter-cnn/
 
 ---
 
-## 💻 Instalasi & Persiapan Lingkungan
+## Instalasi & Persiapan Lingkungan
 
 1. **Kloning Repositori**
    ```bash
@@ -167,7 +167,7 @@ smart-laundry-sorter-cnn/
 
 ---
 
-## 🚀 Panduan Penggunaan
+## Panduan Penggunaan
 
 ### 1. Pra-pemrosesan Dataset & Ekstraksi Fitur Geometri
 Menghasilkan citra 4-kanal ($\text{RGB} + \text{Mask}$) dan file CSV berisi metadata geometri dari gambar mentah:
@@ -189,7 +189,7 @@ python src/inference_realtime.py --model models/exported/laundry_hybrid_cnn.onnx
 
 ---
 
-## 📊 Strategi Dataset & Augmentasi
+## Strategi Dataset & Augmentasi
 
 Untuk mencapai generalisasi tinggi pada kondisi lipatan kain nyata, dataset disusun dengan komposisi berikut:
 - **Jumlah Sampel:** Minimal $1.000$ citra per kelas (total $\ge 5.000$ citra) dengan pembagian $70\%$ *Training*, $15\%$ *Validation*, dan $15\%$ *Testing*.
@@ -202,7 +202,7 @@ Untuk mencapai generalisasi tinggi pada kondisi lipatan kain nyata, dataset disu
 
 ---
 
-## 🗺️ Roadmap Pengembangan
+## Roadmap Pengembangan
 
 - [x] Perancangan arsitektur Hybrid 4-Channel CNN + Geometric MLP
 - [x] Implementasi modul ekstraksi kontur, *letterbox padding*, dan *solidity*
