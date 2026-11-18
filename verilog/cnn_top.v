@@ -11,7 +11,7 @@ module cnn_top (
     reg [4:0] state;
     reg [12:0] load_count;
     reg [31:0] geometry_latched;
-    reg signed [7:0] input_mem [0:4095];
+    reg input_mem [0:4095];
     reg signed [7:0] act1_mem [0:8191];
     reg signed [7:0] act2_mem [0:4095];
     reg signed [7:0] act3_mem [0:2047];
@@ -119,7 +119,7 @@ module cnn_top (
             case (layer)
                 2'd1: begin
                     conv_input_addr=(conv_y*64)+conv_x;
-                    conv_input_value=input_mem[conv_input_addr];
+                    conv_input_value=input_mem[conv_input_addr] ? 8'sd1 : 8'sd0;
                     conv_weight_value=conv1_w[conv_weight_addr];
                     conv_bias_value=conv1_b[out_ch];
                     conv_multiplier=conv1_mul_mem[0];
@@ -211,7 +211,7 @@ module cnn_top (
             case (state)
                 S_IDLE: if (start) begin geometry_latched<=geometry_q7; load_count<=0; state<=S_LOAD; end
                 S_LOAD: if (in_valid) begin
-                    input_mem[load_count]<=in_pixel?8'sd1:8'sd0;
+                    input_mem[load_count]<=in_pixel;
                     if (load_count==13'd4095) begin
                         layer<=1; pool_x<=0; pool_y<=0; out_ch<=0;
                         sub_x<=0; sub_y<=0; conv_max<=0; state<=S_LAYER_SETUP;
