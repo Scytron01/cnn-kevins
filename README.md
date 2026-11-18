@@ -4,7 +4,7 @@
 [![TensorFlow](https://img.shields.io/badge/TensorFlow-2.15%2B-orange.svg)](https://www.tensorflow.org/)
 [![OpenCV](https://img.shields.io/badge/OpenCV-4.8%2B-green.svg)](https://opencv.org/)
 [![Edge AI](https://img.shields.io/badge/Edge%20AI-Raspberry%20Pi%205%20%7C%20Jetson-red.svg)](#)
-[![Microcontroller](https://img.shields.io/badge/Hardware-FPGA%20%7C%20-teal.svg)](#)
+[![Microcontroller](https://img.shields.io/badge/Hardware-FPGA-teal.svg)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Sistem otomatisasi penyortiran pakaian kotor berbasis **Computer Vision** dan **Deep Learning (Convolutional Neural Network)** yang mengklasifikasikan item laundry berdasarkan **bentuk geometri, siluet kontur, dan skala piksel** secara *real-time* di atas *conveyor belt*.
