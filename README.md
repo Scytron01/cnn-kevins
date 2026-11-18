@@ -450,39 +450,26 @@ flowchart TD
 
 
 
-~~~mermaid
-flowchart TD
-    USB["USB Flash Drive<br/>JPG / PNG"] --> MEDIA
-    SD["MicroSD<br/>OS + foto + inventory.json"] --> MEDIA
-    subgraph HPS_SYS["HPS ARM Cortex-A9 + Linux"]
-      MEDIA["Media Browser<br/>USB + MicroSD"]
-      DEC["JPEG/PNG Decode"]
-      PRE["OpenCV Preprocessing<br/>silhouette 64x64 + 4 geometry features"]
-      APP["Inventory Manager<br/>SHA-256 dedup + JSON"]
-      UI["Pillow UI Renderer<br/>RGB565 640x480"]
-      MEDIA --> DEC --> PRE
-      APP --> UI
-    end
-    subgraph FPGA["Cyclone V FPGA Fabric"]
-      CSR["CNN Avalon-MM Slave<br/>mask RAM + geometry + START/DONE"]
-      CNN["CNN INT8 Accelerator<br/>Conv1-3 / GAP / FC / ArgMax"]
-      KEY["KEY/SW Controller<br/>KEY0..KEY3 + SW"]
-      DMA["VGA Framebuffer DMA<br/>RGB565 scanout"]
-      CSR --> CNN
-      KEY --> CSR
-    end
-    PRE -->|"H2F bridge: 128 mask words + Q7 geometry"| CSR
-    CNN -->|"class_id + cycle count"| APP
-    UI -->|"shared FPGA SDRAM framebuffer"| DMA
-    DMA --> VGA["VGA Monitor"]
-    KEY -->|"button events / source filter"| MEDIA
-~~~
+~~~ 
 
-**HPS** membaca foto dari media removable, melakukan decoding JPEG/PNG, memanggil preprocessing yang sama dengan pipeline training, mengirim 4096 bit mask dan empat fitur geometri ke FPGA, menyimpan barang yang dikonfirmasi ke inventaris, dan membuat dashboard RGB565.
+### Apa yang dikerjakan HPS dan FPGA
 
-**FPGA** menerima mask melalui CNN Avalon-MM wrapper, menjalankan inferensi, menyediakan KEY/SW register, dan membaca framebuffer dari FPGA SDRAM untuk keluaran VGA.
+**HPS ARM + Linux** menjadi pengelola file foto dan aplikasi utama pada board. HPS membaca folder foto dari USB/MicroSD, menampilkan daftar foto, membuka JPG/PNG, menjalankan preprocessing, mengirim data ke CNN, memperbarui inventaris, dan menggambar dashboard.
 
-Nios V telemetry source yang sudah ada tetap dipertahankan. Pada mode standalone ini, pengelolaan filesystem dan gambar dikerjakan oleh HPS ARM Linux karena HPS memiliki antarmuka USB/SD dan lingkungan Linux; Nios V bersifat opsional untuk peripheral/control tambahan, bukan host aplikasi Linux.
+**FPGA fabric** menjadi akselerator dan pengendali I/O. FPGA menerima mask 64x64 serta empat fitur geometri melalui Avalon-MM, menjalankan CNN dan ArgMax, membaca input KEY/SW, lalu melakukan scanout framebuffer ke monitor VGA.
+
+Nios V telemetry source yang sudah ada tetap dipertahankan sebagai contoh terpisah. Aplikasi file foto berjalan pada HPS ARM Linux, bukan pada Nios V.
+
+### Skenario penggunaan
+
+1. **Tambahkan foto:** bila perlu, gunakan laptop untuk menyalin foto JPG/PNG ke folder `LAUNDRY/images/` di USB flash drive atau MicroSD. Tidak perlu mengubah atau mem-flash ulang bitstream FPGA untuk menambah foto.
+2. **Mulai standalone:** pasang media pada DE10-Standard dan nyalakan board. HPS Linux membaca media lalu membentuk daftar foto.
+3. **Pilih dan preview:** KEY0/KEY1 berpindah foto. Monitor eksternal menampilkan foto yang sedang dipilih.
+4. **Klasifikasi:** KEY2 menjalankan preprocessing di HPS dan inferensi CNN di FPGA. Hasil kategori muncul di monitor.
+5. **Tambah inventaris:** KEY3 mengonfirmasi hasil. HPS menyimpan catatan foto, nama file, sumber media, kategori, waktu, dan hash agar file yang sama tidak dihitung dua kali.
+6. **Lihat rekap:** dashboard menampilkan preview foto aktif dan inventaris berisi kategori barang beserta jumlahnya. Desain tampilan lanjutan dapat menampilkan thumbnail foto di setiap baris inventaris; aplikasi saat ini menampilkan preview foto aktif dan jumlah per kategori.
+
+**Makna “upload ke FPGA”:** pada desain ini foto tidak ditulis ke logic fabric. Foto disalin ke USB/MicroSD, lalu dibaca oleh HPS Linux di dalam DE10-Standard. HPS mengirim hanya mask dan fitur numerik ke CNN di FPGA. Dengan begitu, laptop hanya perangkat persiapan/transfer file dan tidak diperlukan selama board digunakan.
 
 ### Tombol dan switch
 
