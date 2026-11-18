@@ -1,8 +1,8 @@
 # Dataset dan galeri gambar
 
-## Sumber metadata utama
+## Sumber Dataset
 
-Dataset utama proyek tetap [Fashion Product Images (Small)](https://www.kaggle.com/datasets/paramaggarwal/fashion-product-images-small?resource=download)
+Dataset utama proyek ini yaitu [Fashion Product Images (Small)](https://www.kaggle.com/datasets/paramaggarwal/fashion-product-images-small?resource=download)
 
 ## Galeri JPG yang bisa dibuka langsung
 
