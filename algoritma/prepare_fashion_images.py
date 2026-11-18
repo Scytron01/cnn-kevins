@@ -188,13 +188,17 @@ def main():
     mapped["_class_id"] = mapped["_class_id"].astype(int)
     image_index = build_image_index(image_root)
 
-    if args.output_dir.exists() and any(args.output_dir.iterdir()) and not args.overwrite:
-        raise FileExistsError(f"{args.output_dir} sudah berisi data. Gunakan --overwrite untuk mengganti hasil split JPG.")
-    if args.overwrite and args.output_dir.exists():
-        for split in ("train", "valid", "test"):
-            split_root = args.output_dir / split
-            if split_root.exists():
-                shutil.rmtree(split_root)
+    existing_jpgs = [
+        path for path in args.output_dir.rglob("*")
+        if path.is_file() and path.suffix.lower() in IMAGE_SUFFIXES
+    ] if args.output_dir.exists() else []
+    if existing_jpgs and not args.overwrite:
+        raise FileExistsError(
+            f"{args.output_dir} sudah berisi foto JPG. Gunakan --overwrite untuk membuat ulang split."
+        )
+    if args.overwrite:
+        for old_image in existing_jpgs:
+            old_image.unlink()
     args.output_dir.mkdir(parents=True, exist_ok=True)
     args.processed_dir.mkdir(parents=True, exist_ok=True)
     args.preview_dir.mkdir(parents=True, exist_ok=True)
