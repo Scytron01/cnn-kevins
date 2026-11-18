@@ -1,12 +1,19 @@
 # Validation status
 
-The ingestion/materialization and preprocessing smoke test used a local fixture (CSV id/articleType plus images directory). It produced NPZ shape (15, 1, 64, 64), three fixture samples per class. This is not real Kaggle data and not an accuracy result.
+## Existing software and RTL checks
 
-Real Kaggle download and class distribution are not verified in this authoring session. Real training, ModelSim simulation, Quartus synthesis/timing and physical board test remain pending.
+- Earlier Python dataset ingest/preprocessing fixture tests exercise the Kaggle-style CSV/images contract; the fixture is synthetic and is not the real Kaggle download.
+- HPS helper tests cover 64x64 mask packing (LSB-first), image-list scanning, 640x480 UI rendering, and SHA-256 inventory duplicate prevention.
+- Python syntax check is run on hps/app/laundry_app.py.
+- Verilog testbenches are provided for CNN Avalon wrapper, KEY/SW debouncer, and VGA timing. They are compiled/run by the de10 standalone GitHub Actions workflow when the workflow completes.
 
+## Not yet validated
 
-## CNN Verilog checks
-- The PyTorch weight exporter passed a local smoke test using a randomly initialized checkpoint and synthetic calibration data; expected ROM sizes and quantization metadata were generated. This is not a trained model or an accuracy result.
-- A full-frame RTL testbench and Icarus/ModelSim scripts are included. No Verilog simulator was available in the authoring environment, so RTL simulation has not yet been executed here.
-- Checked-in weight ROMs are zero placeholders. Export a trained checkpoint before interpreting the predicted class.
-- Quartus synthesis, timing/resource reports, and Cyclone V board testing remain pending.
+- Real Fashion Clothing Products Catalog download/training on the HPS or host.
+- CNN classification with exported trained weights. Current ROM files are placeholders, so a result is not meaningful.
+- Bit-exact equality between PyTorch quantized outputs and Verilog outputs.
+- ModelSim/Icarus simulation result on the current repository branch until the workflow run completes.
+- Quartus Prime Lite compilation, timing/resource analysis, Platform Designer generation, HPS handoff and Linux boot.
+- Shared SDRAM/VGA operation, USB and MicroSD mounting, button interaction, persistent inventory, and full standalone board test.
+
+A source file or testbench being present is not evidence that it has passed simulator, synthesis, or physical-board validation. Report accuracy, speedup, FPGA utilization, timing and latency only after collecting actual results.
