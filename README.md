@@ -20,7 +20,7 @@ Diagram ini menunjukkan aliran data dari sumber dataset sampai hasil prediksi. T
 
 ~~~mermaid
 flowchart TD
-    K["Kaggle: Fashion Clothing Products Catalog<br/>shivamb/fashion-clothing-products-catalog"]
+    K["Kaggle: Fashion Product Images (Small)<br/>paramaggarwal/fashion-product-images-small"]
     D["Download dengan KaggleHub<br/>atau gunakan dataset lokal"]
     M["Baca metadata + petakan articleType<br/>ke 5 kelas laundry"]
     S["Pilih subset per kelas<br/>maks. 1.000 gambar per kelas"]
@@ -351,7 +351,7 @@ Project top-level Quartus (\`.qpf/.qsf\`), pin assignment, dan clock constraint 
 
 ## 7. Referensi proyek
 
-- [Dataset Kaggle — Fashion Clothing Products Catalog](https://www.kaggle.com/datasets/shivamb/fashion-clothing-products-catalog/data)
+- [Dataset Kaggle — Fashion Product Images (Small)](https://www.kaggle.com/datasets/paramaggarwal/fashion-product-images-small/data)
 - [Repository GitHub — cnn-kevins](https://github.com/Scytron01/cnn-kevins)
 - [Laporan status hardware](report/HARDWARE_STATUS.md)
 - [Kompatibilitas toolchain](report/TOOLCHAIN_COMPATIBILITY.md)
@@ -525,7 +525,7 @@ Sistem ini adalah single-label classifier: satu foto sebaiknya berisi satu pakai
 
 ## 10. Galeri dataset dalam file JPG
 
-Dataset katalog utama `shivamb/fashion-clothing-products-catalog` berisi metadata katalog dan bukan direktori foto JPG yang bisa langsung dibuka. Agar foto produk dapat dilihat sebagai file gambar biasa, proyek menyediakan galeri JPG pendamping dari [Fashion Product Images (Small)](https://www.kaggle.com/datasets/paramaggarwal/fashion-product-images-small).
+Dataset katalog utama `paramaggarwal/fashion-product-images-small` berisi metadata katalog dan bukan direktori foto JPG yang bisa langsung dibuka. Agar foto produk dapat dilihat sebagai file gambar biasa, proyek menyediakan galeri JPG pendamping dari [Fashion Product Images (Small)](https://www.kaggle.com/datasets/paramaggarwal/fashion-product-images-small).
 
 Jalankan dari root repository:
 
