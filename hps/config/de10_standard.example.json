@@ -1,0 +1,13 @@
+{
+  "board": "Terasic DE10-Standard",
+  "architecture": "Cyclone V SoC: HPS ARM Linux + FPGA fabric",
+  "cnn_cpu_phys_base": "0x00000000",
+  "buttons_cpu_phys_base": "0x00000000",
+  "framebuffer_cpu_phys_base": "0x00000000",
+  "media_roots": [],
+  "inventory_file": null,
+  "framebuffer_format": "RGB565",
+  "framebuffer_width": 640,
+  "framebuffer_height": 480,
+  "notes": "Replace zero addresses using generated Platform Designer system.sopcinfo and Linux device-tree CPU physical addresses. Avalon word addresses are not CPU physical addresses."
+}
