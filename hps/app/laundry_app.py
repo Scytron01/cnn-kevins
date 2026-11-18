@@ -235,7 +235,6 @@ class VgaFramebuffer:
         r, g, b = rgb[:, :, 0] >> 3, rgb[:, :, 1] >> 2, rgb[:, :, 2] >> 3
         pixels = ((r << 11) | (g << 5) | b).astype("<u2")
         self.mmio.write_bytes(0, pixels.tobytes(order="C"))
-        self.mmio.map.flush()
 
     def close(self) -> None:
         self.mmio.close()
