@@ -67,11 +67,17 @@ def mounted_media() -> list[tuple[Path, str]]:
         if not mount.is_dir():
             continue
         low = mount_text.lower()
-        if device.startswith("/dev/mmcblk") or any(t in low for t in ("sdcard", "microsd", "mmc")):
+        # Never recurse through system mounts (rootfs, boot, proc, sys, dev).
+        if mount == Path("/") or low.startswith(("/proc", "/sys", "/dev", "/boot")):
+            continue
+        is_removable_mount = low.startswith(("/media/", "/run/media/", "/mnt/"))
+        if device.startswith("/dev/mmcblk") and is_removable_mount:
             kind = "sd"
-        elif device.startswith("/dev/sd") or "usb" in low:
+        elif device.startswith("/dev/sd") and is_removable_mount:
             kind = "usb"
-        elif low.startswith(("/media/", "/run/media/", "/mnt/")):
+        elif is_removable_mount and ("microsd" in low or "sdcard" in low):
+            kind = "sd"
+        elif is_removable_mount:
             kind = "unknown"
         else:
             continue
