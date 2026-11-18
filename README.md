@@ -162,52 +162,60 @@ Angka performa baru boleh dicantumkan setelah training dijalankan pada dataset K
 
 ### 3.1 Diagram arsitektur hardware
 
-Diagram berikut adalah **arsitektur target**, bukan klaim bahwa seluruh blok sudah tersedia. Garis solid menunjukkan jalur atau komponen yang sudah mempunyai prototipe RTL/software. Garis putus-putus menunjukkan integrasi yang masih harus dibuat.
+Arsitektur proyek ini berbasis **file foto**, bukan computer vision langsung. Sistem tidak memakai kamera, webcam, conveyor, atau proses capture frame. Laptop hanya opsional untuk menyiapkan dataset/model atau menyalin foto baru ke USB/MicroSD. Setelah board dinyalakan, pemilihan foto, klasifikasi, inventaris, dan tampilan dilakukan oleh DE10-Standard tanpa laptop.
 
 ~~~mermaid
 flowchart TB
-    CAM["Kamera / conveyor<br/>foto pakaian"]
-    CAP["Capture frame + segmentasi<br/>pembentukan mask 64 x 64<br/>BELUM DIIMPLEMENTASIKAN"]
-    STREAM["1-bit mask stream<br/>Avalon-ST"]
-    GEO["Laundry Geometry IP<br/>area + bounding box + row runs<br/>RTL SUDAH ADA"]
-    CSR["Avalon-MM CSR + IRQ<br/>status, area, bbox, width/height,<br/>two-run row count"]
-    NIOS["Nios V + RiscFree firmware<br/>contoh telemetry C tersedia<br/>processor/system perlu diverifikasi"]
-    FEAT["Normalisasi dan packing<br/>4 fitur geometri model<br/>BELUM DIINTEGRASIKAN"]
-    QWEIGHT["Export dan kuantisasi bobot<br/>PyTorch ke fixed-point / INT8<br/>BELUM ADA"]
-    CNN["CNN accelerator<br/>Conv1-Conv3 + ReLU + pooling + GAP<br/>BELUM ADA"]
-    FC["Classifier hardware<br/>FC + ArgMax 5 kelas<br/>BELUM ADA"]
-    RESULT["ID kelas 0 sampai 4<br/>hasil klasifikasi"]
-    ACT["Kontrol pemilah / aktuator<br/>BELUM DIIMPLEMENTASIKAN"]
-    TB["Testbench Verilog<br/>mask sintetis 64 x 64"]
+    LAPTOP["Laptop (opsional)<br/>Menyiapkan foto JPG/PNG atau model"] --> COPY["Salin foto ke folder LAUNDRY/images/"]
+    COPY --> USB["USB Flash Drive"]
+    COPY --> SD["MicroSD"]
+    USB --> MEDIA
+    SD --> MEDIA
 
-    CAM -.-> CAP
-    CAP -.-> STREAM
-    STREAM --> GEO
-    GEO --> CSR
-    CSR -.-> NIOS
-    CSR -.-> FEAT
-    QWEIGHT -.-> CNN
-    STREAM -.-> CNN
-    FEAT -.-> CNN
-    CNN -.-> FC
-    FC -.-> RESULT
-    RESULT -.-> ACT
-    TB --> STREAM
+    subgraph BOARD["DE10-Standard — operasi mandiri"]
+      subgraph HPS["HPS ARM Cortex-A9 + Linux"]
+        MEDIA["Media browser<br/>USB + MicroSD"]
+        DECODE["Decode JPG/PNG"]
+        PRE["Preprocessing OpenCV<br/>Mask 64x64 + 4 fitur geometri"]
+        APP["Aplikasi kontrol<br/>Pilih foto / klasifikasi / konfirmasi"]
+        INV["Inventaris lokal<br/>Daftar barang + jumlah per kategori"]
+        UI["Dashboard 640x480<br/>Foto aktif + hasil + daftar/jumlah"]
+        MEDIA --> DECODE --> PRE
+        PRE --> APP
+        APP --> INV --> UI
+        MEDIA --> UI
+      end
 
-    classDef available fill:#e8f5e9,stroke:#39834a,color:#173a20
-    classDef planned fill:#fff3df,stroke:#b7791f,color:#583b0b,stroke-dasharray:5 5
-    classDef input fill:#e8f1ff,stroke:#3973ac,color:#152b45
-    class TB,GEO,CSR available
-    class CAM,STREAM input
-    class CAP,NIOS,FEAT,QWEIGHT,CNN,FC,RESULT,ACT planned
+      subgraph FPGA["Cyclone V FPGA Fabric"]
+        KEY["KEY0..KEY3 + SW<br/>Controller tombol"]
+        CSR["CNN Avalon-MM<br/>Mask buffer + geometry Q7"]
+        CNN["CNN INT8<br/>Conv1-3 / GAP / FC / ArgMax"]
+        FB["Framebuffer RGB565"]
+        VGA["VGA timing + DMA"]
+        CSR --> CNN
+        KEY --> APP
+        APP --> CSR
+        CNN --> APP
+        UI --> FB --> VGA
+      end
+      VGA --> MONITOR["Monitor eksternal"]
+    end
 ~~~
 
-**Interpretasi diagram:**
+**Alur penggunaan:**
 
-- **Yang sudah tersedia:** geometry extractor menerima satu bit per beat pada Avalon-ST. Setelah EOP, modul menyelesaikan perhitungan statistik dan mengekspos hasil melalui register Avalon-MM. Testbench mengirim mask sintetis untuk menguji hitungan geometri.
-- **Contoh software yang tersedia:** \`software_niosv/src/main.c\` membaca register geometri dan mencetak telemetry. Source ini belum menjadi firmware klasifikasi CNN dan belum disambungkan ke Platform Designer system/BSP lengkap.
-- **Yang harus dikembangkan:** capture kamera, pembuatan mask di hardware, normalisasi fitur, ekspor bobot fixed-point/INT8, Conv1–Conv3, pooling, GAP, FC/ArgMax, dan kontrol aktuator.
-- **Integrasi CPU:** ketersediaan Nios V processor IP harus diperiksa di Platform Designer untuk versi Quartus Prime Lite dan device Cyclone V yang benar-benar digunakan. Keberadaan RiscFree IDE saja tidak menjamin semua kombinasi device/edition mendukung IP tersebut.
+1. Laptop (bila diperlukan) menyalin file JPG/PNG ke USB flash drive atau MicroSD. Foto baru tidak membutuhkan perubahan bitstream atau pemrograman ulang FPGA.
+2. HPS Linux pada DE10-Standard membaca media dan membuat daftar foto yang tersedia.
+3. Foto aktif dapat dipilih dengan KEY0/KEY1 dan preview-nya tampil pada monitor eksternal.
+4. KEY2 meminta HPS melakukan decode dan preprocessing. HPS mengirim mask dan fitur geometri ke CNN di FPGA melalui HPS-to-FPGA bridge.
+5. FPGA mengembalikan ID kelas. Hasil klasifikasi ditampilkan bersama foto aktif.
+6. KEY3 mengonfirmasi barang dan menambahkannya ke inventaris. Dashboard memperbarui jumlah pada kategori yang sesuai.
+
+**Pembagian tugas:** HPS adalah prosesor ARM di dalam SoC DE10-Standard. HPS Linux mengelola filesystem USB/MicroSD, membuka file gambar, preprocessing, inventaris, dan komposisi dashboard. FPGA fabric menjalankan CNN, menerima input tombol, serta melakukan VGA scanout. Jadi board tetap standalone tanpa laptop, tetapi filesystem dan file gambar diakses melalui HPS Linux, bukan langsung oleh logic fabric FPGA.
+
+**Memasukkan foto baru:** salin foto ke folder `LAUNDRY/images/` pada USB atau MicroSD, pasang media ke board, lalu HPS akan membacanya. Istilah “upload ke FPGA” di sini berarti memasukkan foto ke media yang dibaca oleh DE10-Standard; bukan menulis file JPEG/PNG ke logic fabric FPGA. Perubahan foto tidak memerlukan flash ulang FPGA. Perubahan arsitektur atau bobot CNN tetap memerlukan proses training/export dan pembaruan konfigurasi FPGA.
+
+**Catatan geometry IP:** `laundry_geom_ip` dan register Avalon-MM di bagian selanjutnya tetap dipertahankan sebagai modul eksperimen/telemetry. Pada jalur foto standalone, empat fitur geometri dihitung di HPS dan dikirim bersama mask ke CNN melalui Avalon-MM; geometry IP streaming bukan perantara wajib pada jalur inferensi tersebut.
 
 ### 3.2 Peta register geometry IP
 
