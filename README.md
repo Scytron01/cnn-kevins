@@ -6,7 +6,7 @@
 [![Microcontroller](https://img.shields.io/badge/Hardware-FPGA-teal.svg)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Kevin Kidney Sumual | 101022300012
+## Kevin Kidney Sumual | 101022300012
 
 Sistem otomatisasi penyortiran pakaian kotor berbasis **Computer Vision** dan **Deep Learning (Convolutional Neural Network)** yang mengklasifikasikan item laundry berdasarkan **bentuk geometri, siluet kontur, dan skala piksel** secara *real-time*.
 
